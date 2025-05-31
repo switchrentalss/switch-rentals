@@ -22,8 +22,8 @@ export function Sidebar() {
   return (
     <aside className="w-64 bg-white shadow-sm border-r border-gray-200 fixed h-full left-0 top-0 z-40 lg:static lg:z-auto">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="text-xl font-semibold text-gray-900">CrockeryFlow</h1>
-        <p className="text-sm text-gray-500 mt-1">Rental Management</p>
+        <h1 className="text-xl font-semibold text-gray-900">Switch Rental</h1>
+        <p className="text-sm text-gray-500 mt-1">Services LLP</p>
       </div>
       
       <nav className="p-4 space-y-2">
@@ -31,9 +31,9 @@ export function Sidebar() {
           const isActive = location === item.href;
           return (
             <Link key={item.name} href={item.href}>
-              <a
+              <div
                 className={cn(
-                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
+                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
                   isActive
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
@@ -41,7 +41,7 @@ export function Sidebar() {
               >
                 <item.icon className="w-5 h-5" />
                 <span>{item.name}</span>
-              </a>
+              </div>
             </Link>
           );
         })}
@@ -51,10 +51,10 @@ export function Sidebar() {
         <div className="bg-gray-50 rounded-lg p-3">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">JD</span>
+              <span className="text-white text-sm font-medium">SC</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">John Doe</p>
+              <p className="text-sm font-medium text-gray-900 truncate">Samir Chabria</p>
               <p className="text-xs text-gray-500 truncate">Business Owner</p>
             </div>
           </div>

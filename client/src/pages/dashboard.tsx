@@ -311,7 +311,7 @@ export default function Dashboard() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">{item.availableStock}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.totalStock - item.availableStock}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.ratePerDay}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{item.ratePerDay}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <Badge variant={stockStatus.variant}>
                               {stockStatus.status}

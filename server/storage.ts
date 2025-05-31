@@ -91,11 +91,11 @@ export class MemStorage implements IStorage {
 
     // Sample inventory items
     const sampleItems = [
-      { name: "Dinner Plates (White)", description: "10.5 inch ceramic plates", category: "Plates", totalStock: 50, availableStock: 15, ratePerDay: "2.50" },
-      { name: "Wine Glasses", description: "Crystal wine glasses", category: "Glassware", totalStock: 24, availableStock: 2, ratePerDay: "1.75" },
-      { name: "Table Linens", description: "White cotton tablecloths", category: "Linens", totalStock: 30, availableStock: 18, ratePerDay: "8.00" },
-      { name: "Salad Plates", description: "8 inch ceramic plates", category: "Plates", totalStock: 40, availableStock: 25, ratePerDay: "2.00" },
-      { name: "Champagne Flutes", description: "Crystal champagne glasses", category: "Glassware", totalStock: 36, availableStock: 12, ratePerDay: "1.50" },
+      { name: "Dinner Plates (White)", description: "10.5 inch ceramic plates", category: "Plates", totalStock: 50, availableStock: 15, ratePerDay: "25.00" },
+      { name: "Wine Glasses", description: "Crystal wine glasses", category: "Glassware", totalStock: 24, availableStock: 2, ratePerDay: "15.00" },
+      { name: "Table Linens", description: "White cotton tablecloths", category: "Linens", totalStock: 30, availableStock: 18, ratePerDay: "80.00" },
+      { name: "Salad Plates", description: "8 inch ceramic plates", category: "Plates", totalStock: 40, availableStock: 25, ratePerDay: "20.00" },
+      { name: "Champagne Flutes", description: "Crystal champagne glasses", category: "Glassware", totalStock: 36, availableStock: 12, ratePerDay: "12.00" },
     ];
 
     sampleItems.forEach(item => {
@@ -119,7 +119,7 @@ export class MemStorage implements IStorage {
         endDate: new Date(nextWeek.getTime() + 86400000).toISOString().split('T')[0],
         eventDetails: "Wedding reception for 100 guests",
         status: "active",
-        totalAmount: "450.00",
+        totalAmount: "4500.00",
         createdAt: new Date()
       },
       { 
@@ -130,7 +130,7 @@ export class MemStorage implements IStorage {
         endDate: new Date(today.getTime() + 2 * 86400000).toISOString().split('T')[0],
         eventDetails: "Corporate lunch event",
         status: "pending",
-        totalAmount: "275.00",
+        totalAmount: "2750.00",
         createdAt: new Date()
       },
     ];
@@ -395,7 +395,7 @@ export class MemStorage implements IStorage {
     return {
       activeOrders,
       itemsOut,
-      monthlyRevenue: `$${monthlyRevenue.toFixed(2)}`,
+      monthlyRevenue: `₹${monthlyRevenue.toFixed(2)}`,
       overdueItems
     };
   }

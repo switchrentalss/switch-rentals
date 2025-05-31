@@ -138,7 +138,7 @@ export default function Orders() {
                           {order.items.length} items
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${order.totalAmount}
+                          ₹{order.totalAmount}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <Badge variant={getStatusBadgeVariant(order.status)}>
