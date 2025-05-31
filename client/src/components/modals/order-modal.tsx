@@ -285,7 +285,7 @@ export function OrderModal({ open, onOpenChange }: OrderModalProps) {
                         <SelectContent>
                           {inventory?.filter(inv => inv.availableStock > 0).map((inventoryItem) => (
                             <SelectItem key={inventoryItem.id} value={inventoryItem.id.toString()}>
-                              {inventoryItem.name} (${inventoryItem.ratePerDay}/day)
+                              {inventoryItem.name} (₹{inventoryItem.ratePerDay}/day)
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -300,7 +300,7 @@ export function OrderModal({ open, onOpenChange }: OrderModalProps) {
                       />
 
                       <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium">${item.totalAmount}</span>
+                        <span className="text-sm font-medium">₹{item.totalAmount}</span>
                         <Button 
                           type="button" 
                           variant="ghost" 
@@ -326,7 +326,7 @@ export function OrderModal({ open, onOpenChange }: OrderModalProps) {
               <div>
                 <p className="text-sm text-gray-600">Total Estimate</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ${form.watch("totalAmount")}
+                  ₹{form.watch("totalAmount")}
                 </p>
               </div>
 

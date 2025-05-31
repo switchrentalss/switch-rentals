@@ -52,7 +52,7 @@ export default function Reports() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">${totalRevenue.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">₹{totalRevenue.toFixed(2)}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-green-600" />
@@ -66,7 +66,7 @@ export default function Reports() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg Order Value</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">${avgOrderValue.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">₹{avgOrderValue.toFixed(2)}</p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <Calendar className="w-6 h-6 text-purple-600" />
@@ -166,7 +166,7 @@ export default function Reports() {
                           {format(new Date(order.createdAt), "MMM dd, yyyy")}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${order.totalAmount}
+                          ₹{order.totalAmount}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <Badge variant={order.status === "active" ? "default" : "secondary"}>
