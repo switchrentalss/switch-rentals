@@ -20,7 +20,7 @@ export function Sidebar() {
   const [location] = useLocation();
 
   return (
-    <aside className="w-64 bg-white shadow-sm border-r border-gray-200 fixed h-full left-0 top-0 z-40 lg:static lg:z-auto">
+    <aside className="w-64 bg-white shadow-sm border-r border-gray-200 fixed h-full left-0 top-0 z-40">
       <div className="p-6 border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">Switch Rental</h1>
         <p className="text-sm text-gray-500 mt-1">Services LLP</p>
