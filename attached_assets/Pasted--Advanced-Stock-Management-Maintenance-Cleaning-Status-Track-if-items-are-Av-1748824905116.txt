@@ -1,0 +1,84 @@
+**Advanced Stock Management:**
+    *   [ ] **Maintenance & Cleaning Status:** Track if items are "Available," "Out for Rent," "Needs Cleaning," "In Repair," "Broken/Lost."
+        *   *Schema: Add `maintenance_status` to `inventoryItems`.*
+        *   *Backend: Update storage & API logic.*
+        *   *Frontend: Display & allow updates.*
+    *   [ ] **Replacement Cost:** Store the replacement cost for each item.
+        *   *Schema: Add `replacement_cost` to `inventoryItems`.*
+        *   *Backend: Update storage & API logic.*
+        *   *Frontend: Display & allow updates.*
+    *   [ ] **Serial Number/Barcode Tracking:** For high-value or unique items.
+        *   *Requires significant design and schema changes (e.g., `serialized_items` table).*
+    *   [ ] **Set/Package Management:** Define "sets" or "packages" (e.g., "Dinner Set for 10").
+        *   *Requires new tables (e.g., `item_sets`, `item_set_components`) and complex availability logic.*
+    *   [ ] **Buffer Stock/Safety Stock:** Implement a buffer for popular items.
+    *   [ ] **Item Variations:** Manage items with variations (color, design) under a parent item.
+*   **Pricing & Availability:**
+    *   [ ] **Dynamic/Tiered Pricing:** Based on duration, quantity, customer type.
+    *   [ ] **Real-time Availability Calendar:** Visual calendar view for item availability.
+    *   [ ] **Damage Waivers/Insurance:** Option to add damage waiver fees.
+*   **Item Information:**
+    *   [ ] **High-Quality Images & Videos:** Allow multiple images/videos per item.
+        *   *Consider storage implications (cloud storage like S3/Cloudinary might be needed long-term).*
+
+---
+
+## II. Streamlining Order Management & Customer Experience
+
+*   **Quotation System:**
+    *   [ ] **Create Quotes:** Allow creating quotes that can be converted into orders.
+    *   [ ] **Inventory Locking for Quotes:** Optionally lock inventory for a short period for quoted items.
+*   **Advanced Order Statuses:**
+    *   [ ] **Granular Statuses:** Beyond "pending" (e.g., "Confirmed," "Packed," "Out for Delivery," "Delivered," "Returned," "Partially Returned," "Completed," "Cancelled").
+        *   *Schema: Update `orders.status` enum/varchar options.*
+        *   *Backend: Update logic for status transitions.*
+        *   *Frontend: Reflect new statuses.*
+*   **Returns & Fees:**
+    *   [ ] **Partial Returns Handling:** Manage scenarios where only part of an order is returned.
+    *   [ ] **Automated Late Fees:** Calculate late fees based on predefined rules.
+*   **Automated Notifications (Email/SMS):**
+    *   [ ] Order confirmation.
+    *   [ ] Rental start/end reminders.
+    *   [ ] Overdue item alerts.
+    *   [ ] Low stock alerts (for staff).
+*   **Customer Portal (Future Growth):**
+    *   [ ] View past orders.
+    *   [ ] Track current rentals.
+    *   [ ] Place new orders/request quotes.
+*   **Delivery & Pickup Scheduling:**
+    *   [ ] Manage delivery/pickup logistics.
+
+---
+
+## III. Improving Operations & Analytics
+
+*   **User Roles & Permissions (for Staff):**
+    *   [ ] Define roles (Admin, Order Manager, Inventory Clerk) with different access levels.
+        *   *Requires adding user authentication and authorization layer if not already present beyond basic customer login.*
+*   **Damage & Loss Tracking:**
+    *   [ ] Systematically record damaged/lost items, link to orders/customers.
+*   **Reporting & Advanced Analytics:**
+    *   [ ] Popularity Reports.
+    *   [ ] Revenue Reports (by item, category, customer, time period).
+    *   [ ] Utilization Rate Reports.
+    *   [ ] Damage/Loss Reports.
+    *   [ ] Customer Reports (order history, lifetime value).
+*   **Integration Capabilities:**
+    *   [ ] Accounting Software (e.g., QuickBooks, Xero).
+    *   [ ] Payment Gateways.
+    *   [ ] Calendar Integration.
+*   **Data Import/Export:**
+    *   [ ] Bulk import/export of inventory and customer data.
+
+---
+
+## IV. Technical & Architectural Considerations
+
+*   [ ] **Enhanced Search & Filtering:** For inventory and orders.
+*   [ ] **Audit Trails:** Log important actions.
+*   [ ] **Database Backup & Recovery Strategy:** Ensure regular automated backups.
+*   [ ] **Scalability Review:** Periodically review database and backend performance as data grows.
+
+---
+
+This roadmap is a living document and can be adjusted as priorities change. The checkboxes `[ ]` can be used to mark items as `[x]` when completed. 

@@ -14,6 +14,8 @@ import {
   type OrderWithCustomer,
   type DashboardMetrics
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Customers
@@ -52,367 +54,271 @@ export interface IStorage {
   updateInventoryStock(itemId: number, quantityChange: number): Promise<InventoryItem | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private customers: Map<number, Customer>;
-  private inventoryItems: Map<number, InventoryItem>;
-  private orders: Map<number, Order>;
-  private orderItems: Map<number, OrderItem>;
-  private currentCustomerId: number;
-  private currentInventoryId: number;
-  private currentOrderId: number;
-  private currentOrderItemId: number;
-
+export class DatabaseStorage implements IStorage {
   constructor() {
-    this.customers = new Map();
-    this.inventoryItems = new Map();
-    this.orders = new Map();
-    this.orderItems = new Map();
-    this.currentCustomerId = 1;
-    this.currentInventoryId = 1;
-    this.currentOrderId = 1;
-    this.currentOrderItemId = 1;
-
-    // Initialize with some sample data
-    this.initializeSampleData();
+    // Database storage doesn't need initialization maps
   }
 
-  private initializeSampleData() {
-    // Sample customers
-    const sampleCustomers = [
-      { name: "Arjun Sharma", email: "arjun.sharma@gmail.com", phone: "+91 98765 43210", address: "12/A, Linking Road, Bandra West, Mumbai 400050", company: "Sharma Events & Weddings" },
-      { name: "Priya Patel", email: "priya.patel@outlook.com", phone: "+91 97654 32109", address: "304, Hiranandani Gardens, Powai, Mumbai 400076", company: "Patel Catering Services" },
-      { name: "Rajesh Gupta", email: "rajesh.gupta@yahoo.com", phone: "+91 96543 21098", address: "45, Carter Road, Bandra West, Mumbai 400050", company: null },
-    ];
-
-    sampleCustomers.forEach(customer => {
-      const id = this.currentCustomerId++;
-      this.customers.set(id, { id, ...customer, notes: null });
-    });
-
-    // Sample inventory items
-    const sampleItems = [
-      { name: "Dinner Plates (White)", description: "10.5 inch ceramic plates", category: "Plates", totalStock: 50, availableStock: 15, ratePerDay: "25.00" },
-      { name: "Wine Glasses", description: "Crystal wine glasses", category: "Glassware", totalStock: 24, availableStock: 2, ratePerDay: "15.00" },
-      { name: "Table Linens", description: "White cotton tablecloths", category: "Linens", totalStock: 30, availableStock: 18, ratePerDay: "80.00" },
-      { name: "Salad Plates", description: "8 inch ceramic plates", category: "Plates", totalStock: 40, availableStock: 25, ratePerDay: "20.00" },
-      { name: "Champagne Flutes", description: "Crystal champagne glasses", category: "Glassware", totalStock: 36, availableStock: 12, ratePerDay: "12.00" },
-    ];
-
-    sampleItems.forEach(item => {
-      const id = this.currentInventoryId++;
-      this.inventoryItems.set(id, { id, ...item });
-    });
-
-    // Sample orders
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-
-    const sampleOrders = [
-      { 
-        customerId: 1, 
-        orderNumber: "ORD-001",
-        eventDate: nextWeek.toISOString().split('T')[0], 
-        startDate: new Date(nextWeek.getTime() - 86400000).toISOString().split('T')[0],
-        endDate: new Date(nextWeek.getTime() + 86400000).toISOString().split('T')[0],
-        eventDetails: "Wedding reception for 100 guests",
-        status: "active",
-        totalAmount: "4500.00",
-        createdAt: new Date()
-      },
-      { 
-        customerId: 2, 
-        orderNumber: "ORD-002",
-        eventDate: tomorrow.toISOString().split('T')[0], 
-        startDate: today.toISOString().split('T')[0],
-        endDate: new Date(today.getTime() + 2 * 86400000).toISOString().split('T')[0],
-        eventDetails: "Corporate lunch event",
-        status: "pending",
-        totalAmount: "2750.00",
-        createdAt: new Date()
-      },
-    ];
-
-    sampleOrders.forEach(order => {
-      const id = this.currentOrderId++;
-      this.orders.set(id, { id, ...order });
-    });
-  }
-
+  // Customer methods
   async getCustomers(): Promise<Customer[]> {
-    return Array.from(this.customers.values());
+    return await db.select().from(customers);
   }
 
   async getCustomer(id: number): Promise<Customer | undefined> {
-    return this.customers.get(id);
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer || undefined;
   }
 
   async getCustomerByEmail(email: string): Promise<Customer | undefined> {
-    return Array.from(this.customers.values()).find(customer => customer.email === email);
+    const [customer] = await db.select().from(customers).where(eq(customers.email, email));
+    return customer || undefined;
   }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
-    const id = this.currentCustomerId++;
-    const newCustomer: Customer = { id, ...customer };
-    this.customers.set(id, newCustomer);
+    const [newCustomer] = await db.insert(customers).values({
+      ...customer,
+      company: customer.company || null,
+      notes: customer.notes || null
+    }).returning();
     return newCustomer;
   }
 
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
-    const existing = this.customers.get(id);
-    if (!existing) return undefined;
-    
-    const updated = { ...existing, ...customer };
-    this.customers.set(id, updated);
-    return updated;
+    const [updatedCustomer] = await db.update(customers).set(customer).where(eq(customers.id, id)).returning();
+    return updatedCustomer || undefined;
   }
 
   async deleteCustomer(id: number): Promise<boolean> {
-    return this.customers.delete(id);
+    const result = await db.delete(customers).where(eq(customers.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
+  // Inventory methods
   async getInventoryItems(): Promise<InventoryItem[]> {
-    return Array.from(this.inventoryItems.values());
+    return await db.select().from(inventoryItems);
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
-    return this.inventoryItems.get(id);
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
+    return item || undefined;
   }
 
   async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
-    const id = this.currentInventoryId++;
-    const newItem: InventoryItem = { id, ...item };
-    this.inventoryItems.set(id, newItem);
+    const [newItem] = await db.insert(inventoryItems).values({
+      ...item,
+      description: item.description || null
+    }).returning();
     return newItem;
   }
 
   async updateInventoryItem(id: number, item: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined> {
-    const existing = this.inventoryItems.get(id);
-    if (!existing) return undefined;
-    
-    const updated = { ...existing, ...item };
-    this.inventoryItems.set(id, updated);
-    return updated;
+    const [updatedItem] = await db.update(inventoryItems).set(item).where(eq(inventoryItems.id, id)).returning();
+    return updatedItem || undefined;
   }
 
   async deleteInventoryItem(id: number): Promise<boolean> {
-    return this.inventoryItems.delete(id);
+    const result = await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
+  // Order methods
   async getOrders(): Promise<OrderWithCustomer[]> {
-    const orders = Array.from(this.orders.values());
-    const ordersWithCustomers: OrderWithCustomer[] = [];
+    const ordersWithCustomers = await db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        orderNumber: orders.orderNumber,
+        eventDate: orders.eventDate,
+        startDate: orders.startDate,
+        endDate: orders.endDate,
+        eventDetails: orders.eventDetails,
+        status: orders.status,
+        totalAmount: orders.totalAmount,
+        createdAt: orders.createdAt,
+        customer: {
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+          phone: customers.phone,
+          address: customers.address,
+          company: customers.company,
+          notes: customers.notes,
+        }
+      })
+      .from(orders)
+      .innerJoin(customers, eq(orders.customerId, customers.id));
 
-    for (const order of orders) {
-      const customer = this.customers.get(order.customerId);
-      if (customer) {
+    const ordersWithItems = await Promise.all(
+      ordersWithCustomers.map(async (order) => {
         const items = await this.getOrderItems(order.id);
-        ordersWithCustomers.push({
+        return {
           ...order,
-          customer,
           items
-        });
-      }
-    }
+        };
+      })
+    );
 
-    return ordersWithCustomers.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return ordersWithItems;
   }
 
   async getOrder(id: number): Promise<OrderWithCustomer | undefined> {
-    const order = this.orders.get(id);
-    if (!order) return undefined;
+    const [orderWithCustomer] = await db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        orderNumber: orders.orderNumber,
+        eventDate: orders.eventDate,
+        startDate: orders.startDate,
+        endDate: orders.endDate,
+        eventDetails: orders.eventDetails,
+        status: orders.status,
+        totalAmount: orders.totalAmount,
+        createdAt: orders.createdAt,
+        customer: {
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+          phone: customers.phone,
+          address: customers.address,
+          company: customers.company,
+          notes: customers.notes,
+        }
+      })
+      .from(orders)
+      .innerJoin(customers, eq(orders.customerId, customers.id))
+      .where(eq(orders.id, id));
 
-    const customer = this.customers.get(order.customerId);
-    if (!customer) return undefined;
+    if (!orderWithCustomer) return undefined;
 
-    const items = await this.getOrderItems(order.id);
+    const items = await this.getOrderItems(id);
     return {
-      ...order,
-      customer,
+      ...orderWithCustomer,
       items
     };
   }
 
   async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<OrderWithCustomer> {
-    const id = this.currentOrderId++;
-    const orderNumber = `ORD-${String(id).padStart(3, '0')}`;
+    const [newOrder] = await db.insert(orders).values({
+      customerId: order.customerId,
+      orderNumber: order.orderNumber,
+      eventDate: order.eventDate,
+      startDate: order.startDate,
+      endDate: order.endDate,
+      eventDetails: order.eventDetails || null,
+      status: order.status || "pending",
+      totalAmount: order.totalAmount,
+      createdAt: order.createdAt || new Date()
+    }).returning();
     
-    const newOrder: Order = {
-      id,
-      orderNumber,
-      createdAt: new Date(),
-      ...order
-    };
-    
-    this.orders.set(id, newOrder);
-
-    // Create order items
+    // Insert order items
     for (const item of items) {
-      const orderItemId = this.currentOrderItemId++;
-      this.orderItems.set(orderItemId, {
-        id: orderItemId,
-        orderId: id,
-        ...item
-      });
-
-      // Update inventory stock
-      await this.updateInventoryStock(item.itemId, -item.quantity);
+      await db.insert(orderItems).values({ ...item, orderId: newOrder.id });
     }
 
-    const customer = this.customers.get(order.customerId)!;
-    const orderItemsWithItems = await this.getOrderItems(id);
-
-    return {
-      ...newOrder,
-      customer,
-      items: orderItemsWithItems
-    };
+    const result = await this.getOrder(newOrder.id);
+    if (!result) throw new Error("Failed to retrieve created order");
+    return result;
   }
 
   async updateOrder(id: number, order: Partial<InsertOrder>): Promise<Order | undefined> {
-    const existing = this.orders.get(id);
-    if (!existing) return undefined;
-    
-    const updated = { ...existing, ...order };
-    this.orders.set(id, updated);
-    return updated;
+    const [updatedOrder] = await db.update(orders).set(order).where(eq(orders.id, id)).returning();
+    return updatedOrder || undefined;
   }
 
   async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
-    const existing = this.orders.get(id);
-    if (!existing) return undefined;
-    
-    const updated = { ...existing, status };
-    this.orders.set(id, updated);
-    
-    // If returning items, update inventory
-    if (status === "returned") {
-      const items = Array.from(this.orderItems.values()).filter(item => item.orderId === id);
-      for (const item of items) {
-        await this.updateInventoryStock(item.itemId, item.quantity);
-      }
-    }
-    
-    return updated;
+    const [updatedOrder] = await db.update(orders).set({ status }).where(eq(orders.id, id)).returning();
+    return updatedOrder || undefined;
   }
 
   async deleteOrder(id: number): Promise<boolean> {
-    const order = this.orders.get(id);
-    if (!order) return false;
-
-    // Delete order items and restore inventory
-    const items = Array.from(this.orderItems.values()).filter(item => item.orderId === id);
-    for (const item of items) {
-      if (order.status !== "returned") {
-        await this.updateInventoryStock(item.itemId, item.quantity);
-      }
-      this.orderItems.delete(item.id);
-    }
-
-    return this.orders.delete(id);
+    // Delete order items first
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    const result = await db.delete(orders).where(eq(orders.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
+  // Order item methods
   async getOrderItems(orderId: number): Promise<(OrderItem & { item: InventoryItem })[]> {
-    const items = Array.from(this.orderItems.values()).filter(item => item.orderId === orderId);
-    const itemsWithInventory: (OrderItem & { item: InventoryItem })[] = [];
+    const result = await db
+      .select({
+        id: orderItems.id,
+        orderId: orderItems.orderId,
+        itemId: orderItems.itemId,
+        quantity: orderItems.quantity,
+        ratePerDay: orderItems.ratePerDay,
+        totalAmount: orderItems.totalAmount,
+        item: {
+          id: inventoryItems.id,
+          name: inventoryItems.name,
+          description: inventoryItems.description,
+          category: inventoryItems.category,
+          totalStock: inventoryItems.totalStock,
+          availableStock: inventoryItems.availableStock,
+          ratePerDay: inventoryItems.ratePerDay,
+        }
+      })
+      .from(orderItems)
+      .innerJoin(inventoryItems, eq(orderItems.itemId, inventoryItems.id))
+      .where(eq(orderItems.orderId, orderId));
 
-    for (const orderItem of items) {
-      const inventoryItem = this.inventoryItems.get(orderItem.itemId);
-      if (inventoryItem) {
-        itemsWithInventory.push({
-          ...orderItem,
-          item: inventoryItem
-        });
-      }
-    }
-
-    return itemsWithInventory;
+    return result;
   }
 
   async addOrderItem(orderItem: InsertOrderItem): Promise<OrderItem> {
-    const id = this.currentOrderItemId++;
-    const newOrderItem: OrderItem = { id, ...orderItem };
-    this.orderItems.set(id, newOrderItem);
-    
-    // Update inventory stock
-    await this.updateInventoryStock(orderItem.itemId, -orderItem.quantity);
-    
+    const [newOrderItem] = await db.insert(orderItems).values(orderItem).returning();
     return newOrderItem;
   }
 
   async updateOrderItem(id: number, orderItem: Partial<InsertOrderItem>): Promise<OrderItem | undefined> {
-    const existing = this.orderItems.get(id);
-    if (!existing) return undefined;
-    
-    // If quantity changed, update inventory
-    if (orderItem.quantity !== undefined && orderItem.quantity !== existing.quantity) {
-      const quantityDiff = existing.quantity - orderItem.quantity;
-      await this.updateInventoryStock(existing.itemId, quantityDiff);
-    }
-    
-    const updated = { ...existing, ...orderItem };
-    this.orderItems.set(id, updated);
-    return updated;
+    const [updatedOrderItem] = await db.update(orderItems).set(orderItem).where(eq(orderItems.id, id)).returning();
+    return updatedOrderItem || undefined;
   }
 
   async deleteOrderItem(id: number): Promise<boolean> {
-    const orderItem = this.orderItems.get(id);
-    if (!orderItem) return false;
-    
-    // Restore inventory stock
-    await this.updateInventoryStock(orderItem.itemId, orderItem.quantity);
-    
-    return this.orderItems.delete(id);
+    const result = await db.delete(orderItems).where(eq(orderItems.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
+  // Dashboard metrics
   async getDashboardMetrics(): Promise<DashboardMetrics> {
-    const orders = Array.from(this.orders.values());
-    const items = Array.from(this.inventoryItems.values());
-    
-    const activeOrders = orders.filter(order => order.status === "active").length;
-    const itemsOut = items.reduce((sum, item) => sum + (item.totalStock - item.availableStock), 0);
-    
-    // Calculate monthly revenue (current month)
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthlyRevenue = orders
-      .filter(order => {
-        const orderDate = new Date(order.createdAt);
-        return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-      })
-      .reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
-    
-    // Check for overdue items
-    const today = new Date().toISOString().split('T')[0];
-    const overdueOrders = orders.filter(order => order.status === "active" && order.endDate < today);
-    const overdueItems = overdueOrders.reduce((sum, order) => {
-      const orderItems = Array.from(this.orderItems.values()).filter(item => item.orderId === order.id);
-      return sum + orderItems.reduce((itemSum, item) => itemSum + item.quantity, 0);
-    }, 0);
+    const [activeOrdersResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(eq(orders.status, 'active'));
+
+    const [totalItemsOut] = await db
+      .select({ total: sql<number>`sum(${inventoryItems.totalStock} - ${inventoryItems.availableStock})` })
+      .from(inventoryItems);
+
+    const [monthlyRevenueResult] = await db
+      .select({ revenue: sql<string>`sum(${orders.totalAmount})` })
+      .from(orders)
+      .where(sql`${orders.createdAt} >= date_trunc('month', current_date)`);
+
+    const [overdueItemsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(sql`${orders.endDate} < current_date AND ${orders.status} = 'active'`);
 
     return {
-      activeOrders,
-      itemsOut,
-      monthlyRevenue: `₹${monthlyRevenue.toFixed(2)}`,
-      overdueItems
+      activeOrders: activeOrdersResult.count || 0,
+      itemsOut: totalItemsOut.total || 0,
+      monthlyRevenue: monthlyRevenueResult.revenue || "0.00",
+      overdueItems: overdueItemsResult.count || 0,
     };
   }
 
   async updateInventoryStock(itemId: number, quantityChange: number): Promise<InventoryItem | undefined> {
-    const item = this.inventoryItems.get(itemId);
-    if (!item) return undefined;
+    const [updatedItem] = await db
+      .update(inventoryItems)
+      .set({
+        availableStock: sql`${inventoryItems.availableStock} + ${quantityChange}`
+      })
+      .where(eq(inventoryItems.id, itemId))
+      .returning();
     
-    const newAvailableStock = item.availableStock + quantityChange;
-    if (newAvailableStock < 0 || newAvailableStock > item.totalStock) {
-      throw new Error("Invalid stock update: would result in negative or excess stock");
-    }
-    
-    const updated = { ...item, availableStock: newAvailableStock };
-    this.inventoryItems.set(itemId, updated);
-    return updated;
+    return updatedItem || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
