@@ -138,6 +138,7 @@ export default function Inventory() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredInventory.map((item) => {
                       const stockStatus = getStockStatus(item);
+                      const maintenanceStatus = getMaintenanceStatus(item.maintenanceStatus);
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-4 whitespace-nowrap">
@@ -154,16 +155,24 @@ export default function Inventory() {
                           <td className="px-3 py-4 whitespace-nowrap">
                             <Badge variant="outline" className="text-xs">{item.category}</Badge>
                           </td>
-                          <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
-                          <td className="px-3 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{item.availableStock}</td>
-                          <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{item.totalStock - item.availableStock}</td>
-                          <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₹{item.ratePerDay}</td>
-                          <td className="px-3 py-4 whitespace-nowrap">
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{item.availableStock}</td>
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500">{item.totalStock - item.availableStock}</td>
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₹{item.ratePerDay}</td>
+                          <td className="px-2 py-4 whitespace-nowrap">
+                            <Badge variant={maintenanceStatus.variant} className="text-xs">
+                              {maintenanceStatus.label}
+                            </Badge>
+                          </td>
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                            {item.replacementCost ? `₹${item.replacementCost}` : '-'}
+                          </td>
+                          <td className="px-2 py-4 whitespace-nowrap">
                             <Badge variant={stockStatus.variant} className="text-xs">
                               {stockStatus.status}
                             </Badge>
                           </td>
-                          <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
                             <Button variant="ghost" size="sm">
                               <Edit className="w-4 h-4" />
                             </Button>
