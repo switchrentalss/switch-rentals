@@ -21,6 +21,23 @@ function getStockStatus(item: InventoryItem): { status: string; variant: "defaul
   }
 }
 
+function getMaintenanceStatus(status: string): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
+  switch (status) {
+    case "available":
+      return { label: "Available", variant: "default" };
+    case "out_for_rent":
+      return { label: "Out for Rent", variant: "secondary" };
+    case "needs_cleaning":
+      return { label: "Needs Cleaning", variant: "outline" };
+    case "in_repair":
+      return { label: "In Repair", variant: "destructive" };
+    case "broken_lost":
+      return { label: "Broken/Lost", variant: "destructive" };
+    default:
+      return { label: "Available", variant: "default" };
+  }
+}
+
 export default function Inventory() {
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,12 +125,14 @@ export default function Inventory() {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Out</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Day</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Out</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Day</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Maintenance</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replace Cost</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">

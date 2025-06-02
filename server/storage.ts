@@ -3,6 +3,8 @@ import {
   inventoryItems, 
   orders, 
   orderItems,
+  quotes,
+  damageReports,
   type Customer, 
   type InsertCustomer,
   type InventoryItem,
@@ -318,12 +320,12 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Get damage reports count (if table exists)
-    let damageReports = 0;
+    let damageReportsCount = 0;
     try {
       const [damageReportsResult] = await db
         .select({ count: sql<number>`count(*)` })
         .from(damageReports);
-      damageReports = damageReportsResult.count || 0;
+      damageReportsCount = damageReportsResult.count || 0;
     } catch {
       // Table might not exist yet
     }
@@ -334,7 +336,7 @@ export class DatabaseStorage implements IStorage {
       monthlyRevenue: monthlyRevenueResult.revenue || "0.00",
       overdueItems: overdueItemsResult.count || 0,
       pendingQuotes,
-      damageReports,
+      damageReports: damageReportsCount,
     };
   }
 
