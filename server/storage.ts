@@ -198,16 +198,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<OrderWithCustomer> {
+    // Generate order number
+    const orderCount = await db.select({ count: sql<number>`count(*)` }).from(orders);
+    const orderNumber = `ORD-${String(orderCount[0].count + 1).padStart(3, '0')}`;
+    
     const [newOrder] = await db.insert(orders).values({
       customerId: order.customerId,
-      orderNumber: order.orderNumber,
+      orderNumber,
       eventDate: order.eventDate,
       startDate: order.startDate,
       endDate: order.endDate,
       eventDetails: order.eventDetails || null,
       status: order.status || "pending",
       totalAmount: order.totalAmount,
-      createdAt: order.createdAt || new Date()
     }).returning();
     
     // Insert order items
@@ -255,6 +258,8 @@ export class DatabaseStorage implements IStorage {
           totalStock: inventoryItems.totalStock,
           availableStock: inventoryItems.availableStock,
           ratePerDay: inventoryItems.ratePerDay,
+          maintenanceStatus: inventoryItems.maintenanceStatus,
+          replacementCost: inventoryItems.replacementCost,
         }
       })
       .from(orderItems)
@@ -300,11 +305,36 @@ export class DatabaseStorage implements IStorage {
       .from(orders)
       .where(sql`${orders.endDate} < current_date AND ${orders.status} = 'active'`);
 
+    // Get pending quotes count (if quotes table exists)
+    let pendingQuotes = 0;
+    try {
+      const [pendingQuotesResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(quotes)
+        .where(eq(quotes.status, 'pending'));
+      pendingQuotes = pendingQuotesResult.count || 0;
+    } catch {
+      // Table might not exist yet
+    }
+
+    // Get damage reports count (if table exists)
+    let damageReports = 0;
+    try {
+      const [damageReportsResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(damageReports);
+      damageReports = damageReportsResult.count || 0;
+    } catch {
+      // Table might not exist yet
+    }
+
     return {
       activeOrders: activeOrdersResult.count || 0,
       itemsOut: totalItemsOut.total || 0,
       monthlyRevenue: monthlyRevenueResult.revenue || "0.00",
       overdueItems: overdueItemsResult.count || 0,
+      pendingQuotes,
+      damageReports,
     };
   }
 
