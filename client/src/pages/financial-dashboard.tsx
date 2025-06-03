@@ -36,7 +36,7 @@ interface ExpenseCategory {
 export default function FinancialDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("current-year");
 
-  // Mock data based on your Excel structure
+  // Financial data for NI. NE Luxury Dining Rentals based on your Excel structure
   const revenueData: RevenueData[] = [
     {
       month: "January",
