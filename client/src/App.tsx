@@ -10,6 +10,7 @@ import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Reports from "@/pages/reports";
 import FinancialDashboard from "@/pages/financial-dashboard";
+import Invoices from "@/pages/invoices";
 import NotFound from "@/pages/not-found";
 
 function Router() {

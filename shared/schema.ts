@@ -80,6 +80,55 @@ export const damageReports = pgTable("damage_reports", {
   reportedAt: timestamp("reported_at").defaultNow().notNull(),
 });
 
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  orderId: integer("order_id").references(() => orders.id),
+  quoteId: integer("quote_id").references(() => quotes.id),
+  invoiceNumber: varchar("invoice_number", { length: 50 }).unique().notNull(),
+  invoiceType: varchar("invoice_type", { length: 20 }).notNull(), // quotation, proforma, gst_invoice, final_invoice
+  eventDate: date("event_date").notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  eventDetails: text("event_details"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  gstRate: decimal("gst_rate", { precision: 5, scale: 2 }).default("18.00"),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("draft"), // draft, sent, paid, overdue
+  dueDate: date("due_date"),
+  terms: text("terms"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+export const invoiceItems = pgTable("invoice_items", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").references(() => invoices.id).notNull(),
+  itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  ratePerDay: decimal("rate_per_day", { precision: 10, scale: 2 }).notNull(),
+  days: integer("days").notNull(),
+  lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const inventoryReturns = pgTable("inventory_returns", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  invoiceId: integer("invoice_id").references(() => invoices.id),
+  itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
+  quantityShipped: integer("quantity_shipped").notNull(),
+  quantityReturned: integer("quantity_returned").notNull(),
+  conditionStatus: varchar("condition_status", { length: 20 }).notNull(), // perfect, damaged, missing, needs_cleaning
+  damageNotes: text("damage_notes"),
+  penaltyAmount: decimal("penalty_amount", { precision: 10, scale: 2 }).default("0.00"),
+  checkedBy: varchar("checked_by", { length: 100 }),
+  returnDate: timestamp("return_date").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
 // Insert schemas
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
@@ -114,6 +163,24 @@ export const insertDamageReportSchema = createInsertSchema(damageReports).omit({
   reportedAt: true,
 });
 
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  invoiceNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertInventoryReturnSchema = createInsertSchema(inventoryReturns).omit({
+  id: true,
+  returnDate: true,
+  createdAt: true,
+});
+
 // Types
 export type Customer = typeof customers.$inferSelect;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
@@ -145,6 +212,20 @@ export type OrderWithCustomer = Order & {
 export type QuoteWithCustomer = Quote & {
   customer: Customer;
   items: (QuoteItem & { item: InventoryItem })[];
+};
+
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+
+export type InvoiceItem = typeof invoiceItems.$inferSelect;
+export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
+
+export type InventoryReturn = typeof inventoryReturns.$inferSelect;
+export type InsertInventoryReturn = z.infer<typeof insertInventoryReturnSchema>;
+
+export type InvoiceWithCustomer = Invoice & {
+  customer: Customer;
+  items: (InvoiceItem & { item: InventoryItem })[];
 };
 
 export type DashboardMetrics = {
