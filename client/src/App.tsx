@@ -24,6 +24,7 @@ function Router() {
           <Route path="/inventory" component={Inventory} />
           <Route path="/customers" component={Customers} />
           <Route path="/financial" component={FinancialDashboard} />
+          <Route path="/invoices" component={Invoices} />
           <Route path="/reports" component={Reports} />
           <Route component={NotFound} />
         </Switch>

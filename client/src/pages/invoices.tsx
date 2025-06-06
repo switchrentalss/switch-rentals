@@ -239,7 +239,7 @@ export default function Invoices() {
                 <Download className="h-3 w-3 mr-1" />
                 PDF
               </Button>
-              {invoice.invoiceType === 'quotation' && invoice.status !== 'converted' && (
+              {invoice.invoiceType === 'quotation' && invoice.status === 'draft' && (
                 <Button 
                   variant="default" 
                   size="sm" 

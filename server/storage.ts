@@ -54,6 +54,19 @@ export interface IStorage {
 
   // Inventory Management
   updateInventoryStock(itemId: number, quantityChange: number): Promise<InventoryItem | undefined>;
+
+  // Invoice Management
+  getInvoices(type?: string): Promise<InvoiceWithCustomer[]>;
+  getInvoice(id: number): Promise<InvoiceWithCustomer | undefined>;
+  createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<InvoiceWithCustomer>;
+  updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined>;
+  deleteInvoice(id: number): Promise<boolean>;
+  convertQuoteToInvoice(quoteId: number, invoiceType: string): Promise<InvoiceWithCustomer>;
+
+  // Inventory Returns
+  getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]>;
+  createInventoryReturn(returnData: InsertInventoryReturn): Promise<InventoryReturn>;
+  updateInventoryReturn(id: number, returnData: Partial<InsertInventoryReturn>): Promise<InventoryReturn | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -350,6 +363,261 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedItem || undefined;
+  }
+
+  // Invoice Management
+  async getInvoices(type?: string): Promise<InvoiceWithCustomer[]> {
+    try {
+      let query = db
+        .select({
+          invoice: invoices,
+          customer: customers,
+        })
+        .from(invoices)
+        .leftJoin(customers, eq(invoices.customerId, customers.id));
+
+      if (type) {
+        query = query.where(eq(invoices.invoiceType, type));
+      }
+
+      const results = await query.execute();
+      
+      const invoicesWithItems = await Promise.all(
+        results.map(async ({ invoice, customer }) => {
+          const items = await db
+            .select({
+              invoiceItem: invoiceItems,
+              item: inventoryItems,
+            })
+            .from(invoiceItems)
+            .leftJoin(inventoryItems, eq(invoiceItems.itemId, inventoryItems.id))
+            .where(eq(invoiceItems.invoiceId, invoice.id))
+            .execute();
+
+          return {
+            ...invoice,
+            customer: customer!,
+            items: items.map(({ invoiceItem, item }) => ({
+              ...invoiceItem,
+              item: item!,
+            })),
+          };
+        })
+      );
+
+      return invoicesWithItems;
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      return [];
+    }
+  }
+
+  async getInvoice(id: number): Promise<InvoiceWithCustomer | undefined> {
+    try {
+      const result = await db
+        .select({
+          invoice: invoices,
+          customer: customers,
+        })
+        .from(invoices)
+        .leftJoin(customers, eq(invoices.customerId, customers.id))
+        .where(eq(invoices.id, id))
+        .limit(1)
+        .execute();
+
+      if (result.length === 0) return undefined;
+
+      const { invoice, customer } = result[0];
+
+      const items = await db
+        .select({
+          invoiceItem: invoiceItems,
+          item: inventoryItems,
+        })
+        .from(invoiceItems)
+        .leftJoin(inventoryItems, eq(invoiceItems.itemId, inventoryItems.id))
+        .where(eq(invoiceItems.invoiceId, invoice.id))
+        .execute();
+
+      return {
+        ...invoice,
+        customer: customer!,
+        items: items.map(({ invoiceItem, item }) => ({
+          ...invoiceItem,
+          item: item!,
+        })),
+      };
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      return undefined;
+    }
+  }
+
+  async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<InvoiceWithCustomer> {
+    try {
+      const typePrefix = {
+        'quotation': 'QUO',
+        'proforma': 'PRO',
+        'gst_invoice': 'GST',
+        'final_invoice': 'FIN'
+      }[invoice.invoiceType] || 'INV';
+      
+      const count = await db.select({ count: sql<number>`count(*)` })
+        .from(invoices)
+        .where(eq(invoices.invoiceType, invoice.invoiceType))
+        .execute();
+      
+      const invoiceNumber = `${typePrefix}-${String(count[0].count + 1).padStart(4, '0')}`;
+
+      const [createdInvoice] = await db
+        .insert(invoices)
+        .values({
+          ...invoice,
+          invoiceNumber,
+        })
+        .returning();
+
+      const invoiceItemsWithId = items.map(item => ({
+        ...item,
+        invoiceId: createdInvoice.id,
+      }));
+
+      await db.insert(invoiceItems).values(invoiceItemsWithId).execute();
+
+      const completeInvoice = await this.getInvoice(createdInvoice.id);
+      return completeInvoice!;
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      throw error;
+    }
+  }
+
+  async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
+    try {
+      const [updated] = await db
+        .update(invoices)
+        .set({ ...invoice, updatedAt: new Date() })
+        .where(eq(invoices.id, id))
+        .returning();
+      return updated;
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      return undefined;
+    }
+  }
+
+  async deleteInvoice(id: number): Promise<boolean> {
+    try {
+      await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id)).execute();
+      await db.delete(invoices).where(eq(invoices.id, id)).execute();
+      return true;
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      return false;
+    }
+  }
+
+  async convertQuoteToInvoice(quoteId: number, invoiceType: string): Promise<InvoiceWithCustomer> {
+    try {
+      const quote = await this.getQuote(quoteId);
+      if (!quote) {
+        throw new Error('Quote not found');
+      }
+
+      const invoiceData: InsertInvoice = {
+        customerId: quote.customerId,
+        quoteId: quoteId,
+        invoiceType: invoiceType as any,
+        eventDate: quote.eventDate,
+        startDate: quote.startDate,
+        endDate: quote.endDate,
+        eventDetails: quote.eventDetails,
+        subtotal: quote.subtotal,
+        gstRate: quote.gstRate,
+        gstAmount: quote.gstAmount,
+        totalAmount: quote.totalAmount,
+        status: 'draft',
+        terms: quote.terms,
+      };
+
+      const invoiceItemsData: InsertInvoiceItem[] = quote.items.map(item => {
+        const startDate = new Date(quote.startDate);
+        const endDate = new Date(quote.endDate);
+        const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        return {
+          itemId: item.itemId,
+          quantity: item.quantity,
+          ratePerDay: item.ratePerDay,
+          days: days,
+          lineTotal: item.totalAmount,
+        };
+      });
+
+      const createdInvoice = await this.createInvoice(invoiceData, invoiceItemsData);
+      await this.updateQuote(quoteId, { status: 'converted' });
+
+      return createdInvoice;
+    } catch (error) {
+      console.error('Error converting quote to invoice:', error);
+      throw error;
+    }
+  }
+
+  async getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]> {
+    try {
+      let query = db
+        .select({
+          inventoryReturn: inventoryReturns,
+          item: inventoryItems,
+        })
+        .from(inventoryReturns)
+        .leftJoin(inventoryItems, eq(inventoryReturns.itemId, inventoryItems.id));
+
+      if (orderId) {
+        query = query.where(eq(inventoryReturns.orderId, orderId));
+      }
+
+      const results = await query.execute();
+      
+      return results.map(({ inventoryReturn, item }) => ({
+        ...inventoryReturn,
+        item: item!,
+      }));
+    } catch (error) {
+      console.error('Error fetching inventory returns:', error);
+      return [];
+    }
+  }
+
+  async createInventoryReturn(returnData: InsertInventoryReturn): Promise<InventoryReturn> {
+    try {
+      const [created] = await db
+        .insert(inventoryReturns)
+        .values(returnData)
+        .returning();
+
+      await this.updateInventoryStock(returnData.itemId, returnData.quantityReturned);
+
+      return created;
+    } catch (error) {
+      console.error('Error creating inventory return:', error);
+      throw error;
+    }
+  }
+
+  async updateInventoryReturn(id: number, returnData: Partial<InsertInventoryReturn>): Promise<InventoryReturn | undefined> {
+    try {
+      const [updated] = await db
+        .update(inventoryReturns)
+        .set(returnData)
+        .where(eq(inventoryReturns.id, id))
+        .returning();
+      return updated;
+    } catch (error) {
+      console.error('Error updating inventory return:', error);
+      return undefined;
+    }
   }
 }
 
