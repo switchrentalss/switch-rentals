@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Header } from "@/components/layout/header";
+import { QuotationModal } from "@/components/modals/quotation-modal";
 import { queryClient } from "@/lib/queryClient";
 import { 
   FileText, 
@@ -240,14 +241,41 @@ export default function Invoices() {
                 PDF
               </Button>
               {invoice.invoiceType === 'quotation' && invoice.status === 'draft' && (
+                <div className="flex space-x-1">
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'proforma' })}
+                    disabled={convertToInvoice.isPending}
+                    className="flex-1"
+                  >
+                    <ArrowRight className="h-3 w-3 mr-1" />
+                    To Proforma
+                  </Button>
+                </div>
+              )}
+              {invoice.invoiceType === 'proforma' && invoice.status === 'sent' && (
                 <Button 
                   variant="default" 
                   size="sm" 
-                  onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'proforma' })}
+                  onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'gst_invoice' })}
                   disabled={convertToInvoice.isPending}
+                  className="w-full"
                 >
                   <ArrowRight className="h-3 w-3 mr-1" />
-                  Convert
+                  To GST Invoice
+                </Button>
+              )}
+              {invoice.invoiceType === 'gst_invoice' && invoice.status === 'paid' && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'final_invoice' })}
+                  disabled={convertToInvoice.isPending}
+                  className="w-full"
+                >
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Create Final Invoice
                 </Button>
               )}
             </div>
@@ -368,26 +396,15 @@ export default function Invoices() {
           </TabsList>
 
           <div className="flex space-x-2">
-            <Dialog open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Quotation
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Quotation</DialogTitle>
-                  <DialogDescription>
-                    Create a quotation that can be converted to invoices later
-                  </DialogDescription>
-                </DialogHeader>
-                {/* Quotation form would go here */}
-                <div className="p-4 text-center text-gray-500">
-                  Quotation creation form will be implemented here
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => setCreateInvoiceOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Quotation
+            </Button>
+            
+            <QuotationModal 
+              open={createInvoiceOpen} 
+              onOpenChange={setCreateInvoiceOpen}
+            />
 
             <Dialog open={returnTrackingOpen} onOpenChange={setReturnTrackingOpen}>
               <DialogTrigger asChild>
