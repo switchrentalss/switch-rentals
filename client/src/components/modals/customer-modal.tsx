@@ -16,6 +16,7 @@ const customerSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   address: z.string().min(1, "Address is required"),
   company: z.string().optional(),
+  gstNumber: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -128,6 +129,20 @@ export function CustomerModal({ open, onOpenChange }: CustomerModalProps) {
                     <FormLabel>Company</FormLabel>
                     <FormControl>
                       <Input placeholder="Company name (optional)" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="gstNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="GST number (optional)" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
