@@ -169,21 +169,33 @@ export default function Customers() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => console.log('View customer:', customer.id)}>
+                        <DropdownMenuItem onClick={() => {
+                          setEditingCustomer(customer);
+                          setShowCustomerModal(true);
+                        }}>
                           <Eye className="w-4 h-4 mr-2" />
                           View Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => console.log('Edit customer:', customer.id)}>
+                        <DropdownMenuItem onClick={() => {
+                          setEditingCustomer(customer);
+                          setShowCustomerModal(true);
+                        }}>
                           <Edit className="w-4 h-4 mr-2" />
                           Edit Customer
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => console.log('View orders:', customer.id)}>
+                        <DropdownMenuItem onClick={() => {
+                          // Navigate to orders page with customer filter
+                          window.location.href = `/orders?customer=${customer.id}`;
+                        }}>
                           <FileText className="w-4 h-4 mr-2" />
                           View Orders
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
-                          onClick={() => console.log('Delete customer:', customer.id)}
+                          onClick={() => {
+                            setCustomerToDelete(customer);
+                            setDeleteDialogOpen(true);
+                          }}
                           className="text-red-600"
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
@@ -216,8 +228,37 @@ export default function Customers() {
 
       <CustomerModal 
         open={showCustomerModal} 
-        onOpenChange={setShowCustomerModal}
+        onOpenChange={(open) => {
+          setShowCustomerModal(open);
+          if (!open) setEditingCustomer(null);
+        }}
+        editingCustomer={editingCustomer}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{customerToDelete?.name}"? This action cannot be undone and will permanently remove the customer and all their associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (customerToDelete) {
+                  deleteCustomerMutation.mutate(customerToDelete.id);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteCustomerMutation.isPending}
+            >
+              {deleteCustomerMutation.isPending ? "Deleting..." : "Delete Customer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

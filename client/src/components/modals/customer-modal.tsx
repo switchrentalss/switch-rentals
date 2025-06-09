@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -9,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Customer } from "@shared/schema";
 
 const customerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -25,9 +27,10 @@ type CustomerFormData = z.infer<typeof customerSchema>;
 interface CustomerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editingCustomer?: Customer | null;
 }
 
-export function CustomerModal({ open, onOpenChange }: CustomerModalProps) {
+export function CustomerModal({ open, onOpenChange, editingCustomer }: CustomerModalProps) {
   const { toast } = useToast();
 
   const form = useForm<CustomerFormData>({
@@ -42,6 +45,31 @@ export function CustomerModal({ open, onOpenChange }: CustomerModalProps) {
       notes: "",
     },
   });
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editingCustomer) {
+      form.reset({
+        name: editingCustomer.name,
+        email: editingCustomer.email,
+        phone: editingCustomer.phone,
+        address: editingCustomer.address,
+        company: editingCustomer.company || "",
+        gstNumber: editingCustomer.gstNumber || "",
+        notes: editingCustomer.notes || "",
+      });
+    } else {
+      form.reset({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        company: "",
+        gstNumber: "",
+        notes: "",
+      });
+    }
+  }, [editingCustomer, form]);
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: CustomerFormData) => {
@@ -65,8 +93,34 @@ export function CustomerModal({ open, onOpenChange }: CustomerModalProps) {
     },
   });
 
+  const updateCustomerMutation = useMutation({
+    mutationFn: async (data: CustomerFormData) => {
+      return apiRequest("PUT", `/api/customers/${editingCustomer?.id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Customer updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      onOpenChange(false);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: CustomerFormData) => {
-    createCustomerMutation.mutate(data);
+    if (editingCustomer) {
+      updateCustomerMutation.mutate(data);
+    } else {
+      createCustomerMutation.mutate(data);
+    }
   };
 
   return (
