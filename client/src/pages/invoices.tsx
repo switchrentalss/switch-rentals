@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Header } from "@/components/layout/header";
 import { QuotationModal } from "@/components/modals/quotation-modal";
+import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { 
   FileText, 
   Plus, 
@@ -133,6 +135,35 @@ export default function Invoices() {
   const [selectedTab, setSelectedTab] = useState("quotations");
   const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
   const [returnTrackingOpen, setReturnTrackingOpen] = useState(false);
+  const [selectedGstInvoice, setSelectedGstInvoice] = useState<any>(null);
+  const [returnChallanOpen, setReturnChallanOpen] = useState(false);
+  const { toast } = useToast();
+
+  const convertToInvoice = useMutation({
+    mutationFn: async ({ quoteId, invoiceType }: { quoteId: number; invoiceType: string }) => {
+      const response = await fetch(`/api/invoices/${quoteId}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceType })
+      });
+      if (!response.ok) throw new Error("Failed to convert invoice");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      toast({
+        title: "Success",
+        description: "Invoice converted successfully"
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to convert invoice",
+        variant: "destructive"
+      });
+    }
+  });
 
   // Fetch invoices by type
   const { data: quotations = [], isLoading: quotationsLoading } = useQuery({
@@ -180,21 +211,7 @@ export default function Invoices() {
     }
   });
 
-  const convertToInvoice = useMutation({
-    mutationFn: async ({ quoteId, invoiceType }: { quoteId: number; invoiceType: string }) => {
-      const response = await fetch(`/api/quotes/${quoteId}/convert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceType })
-      });
-      if (!response.ok) throw new Error('Failed to convert quote');
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
-    }
-  });
+
 
   function InvoiceCard({ invoice }: { invoice: Invoice }) {
     return (
@@ -268,14 +285,16 @@ export default function Invoices() {
               )}
               {invoice.invoiceType === 'gst_invoice' && invoice.status === 'paid' && (
                 <Button 
-                  variant="outline" 
+                  variant="default" 
                   size="sm" 
-                  onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'final_invoice' })}
-                  disabled={convertToInvoice.isPending}
+                  onClick={() => {
+                    setSelectedGstInvoice(invoice);
+                    setReturnChallanOpen(true);
+                  }}
                   className="w-full"
                 >
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Create Final Invoice
+                  <Package className="h-3 w-3 mr-1" />
+                  Process Returns
                 </Button>
               )}
             </div>
