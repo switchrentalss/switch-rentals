@@ -88,19 +88,41 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
   const form = useForm<InventoryFormData>({
     resolver: zodResolver(inventorySchema),
     defaultValues: editingItem ? {
+      sku: editingItem.sku || "",
+      itemCode: editingItem.itemCode || "",
       name: editingItem.name,
       description: editingItem.description || "",
       category: editingItem.category,
+      subcategory: editingItem.subcategory || "",
       totalStock: editingItem.totalStock,
       availableStock: editingItem.availableStock,
+      outStock: editingItem.outStock || 0,
       ratePerDay: editingItem.ratePerDay,
+      replacementCost: editingItem.replacementCost || "",
+      status: editingItem.status || "in_stock",
+      location: editingItem.location || "",
+      supplier: editingItem.supplier || "",
+      purchaseDate: editingItem.purchaseDate || "",
+      warrantyExpiry: editingItem.warrantyExpiry || "",
+      notes: editingItem.notes || "",
     } : {
+      sku: "",
+      itemCode: "",
       name: "",
       description: "",
       category: "",
+      subcategory: "",
       totalStock: 1,
       availableStock: 1,
+      outStock: 0,
       ratePerDay: "",
+      replacementCost: "",
+      status: "in_stock",
+      location: "",
+      supplier: "",
+      purchaseDate: "",
+      warrantyExpiry: "",
+      notes: "",
     },
   });
 
@@ -189,12 +211,40 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="name"
+                name="sku"
                 render={({ field }) => (
                   <FormItem>
+                    <FormLabel>SKU/ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="SKU-001 or SKANS-C154H-31" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="itemCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Item Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="C154H-11.25" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Item Name *</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Dinner Plates (White)" {...field} />
+                      <Input placeholder="e.g., Small Rectangular Plates (Half)" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -217,6 +267,31 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
                         {categories.map((category) => (
                           <SelectItem key={category} value={category}>
                             {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="subcategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subcategory</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select subcategory" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {form.watch("category") && subcategories[form.watch("category") as keyof typeof subcategories]?.map((subcat) => (
+                          <SelectItem key={subcat} value={subcat}>
+                            {subcat}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -272,17 +347,137 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
 
               <FormField
                 control={form.control}
-                name="ratePerDay"
+                name="outStock"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Rate per Day *</FormLabel>
+                    <FormLabel>Out Stock</FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
-                        step="0.01"
-                        placeholder="2.50" 
-                        {...field} 
+                        placeholder="0" 
+                        value={form.watch("totalStock") - form.watch("availableStock")}
+                        disabled
+                        className="bg-gray-50"
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="ratePerDay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rate/Day (₹) *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="25.00" 
+                        {...field}
+                        step="0.01"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="replacementCost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Replace Cost (₹)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="162.00" 
+                        {...field}
+                        step="0.01"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status.value} value={status.value}>
+                            {status.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Warehouse A, Shelf 2" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="supplier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Supplier</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Supplier Company Name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="purchaseDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purchase Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="warrantyExpiry"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Warranty Expiry</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -300,6 +495,24 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
                     <Textarea 
                       placeholder="e.g., 10.5 inch ceramic plates, dishwasher safe" 
                       rows={3} 
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Additional notes about maintenance, care instructions, or special handling" 
+                      rows={2} 
                       {...field} 
                     />
                   </FormControl>
