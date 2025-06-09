@@ -62,9 +62,34 @@ export default function Inventory() {
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+  const { toast } = useToast();
 
   const { data: inventory, isLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
+  });
+
+  const deleteInventoryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/inventory/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Inventory item deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete inventory item",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredInventory = inventory?.filter(item => 
@@ -225,7 +250,10 @@ export default function Inventory() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
-                                  onClick={() => console.log('Delete item:', item.id)}
+                                  onClick={() => {
+                                    setItemToDelete(item);
+                                    setDeleteDialogOpen(true);
+                                  }}
                                   className="text-red-600"
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
@@ -253,6 +281,31 @@ export default function Inventory() {
         }}
         editingItem={editingItem}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Inventory Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone and will permanently remove the item from your inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (itemToDelete) {
+                  deleteInventoryMutation.mutate(itemToDelete.id);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteInventoryMutation.isPending}
+            >
+              {deleteInventoryMutation.isPending ? "Deleting..." : "Delete Item"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

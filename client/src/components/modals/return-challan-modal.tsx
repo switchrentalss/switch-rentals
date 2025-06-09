@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -54,7 +54,7 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
   });
 
   // Initialize return items when invoice is loaded
-  useState(() => {
+  useEffect(() => {
     if (gstInvoice && gstInvoice.items) {
       const initialItems: ReturnItem[] = gstInvoice.items.map(item => ({
         itemId: item.itemId,
@@ -67,7 +67,7 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
       }));
       setReturnItems(initialItems);
     }
-  });
+  }, [gstInvoice]);
 
   const processReturnsMutation = useMutation({
     mutationFn: async (data: ReturnChallanFormData) => {
