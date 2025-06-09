@@ -127,7 +127,7 @@ export function CustomerModal({ open, onOpenChange, editingCustomer }: CustomerM
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add New Customer</DialogTitle>
+          <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add New Customer'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -250,9 +250,12 @@ export function CustomerModal({ open, onOpenChange, editingCustomer }: CustomerM
               </Button>
               <Button 
                 type="submit" 
-                disabled={createCustomerMutation.isPending}
+                disabled={createCustomerMutation.isPending || updateCustomerMutation.isPending}
               >
-                {createCustomerMutation.isPending ? "Creating..." : "Create Customer"}
+                {editingCustomer 
+                  ? (updateCustomerMutation.isPending ? "Updating..." : "Update Customer")
+                  : (createCustomerMutation.isPending ? "Creating..." : "Create Customer")
+                }
               </Button>
             </div>
           </form>

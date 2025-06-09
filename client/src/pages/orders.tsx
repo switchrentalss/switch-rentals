@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { OrderModal } from "@/components/modals/order-modal";
+import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -14,9 +15,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ClipboardList, Search, Filter, Eye, MoreHorizontal, Edit, Package, FileText, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-import type { OrderWithCustomer } from "@shared/schema";
+import type { OrderWithCustomer, InvoiceWithCustomer } from "@shared/schema";
 
 function getStatusBadgeVariant(status: string) {
   switch (status) {
@@ -35,10 +48,38 @@ function getStatusBadgeVariant(status: string) {
 
 export default function Orders() {
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<OrderWithCustomer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<OrderWithCustomer | null>(null);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithCustomer | null>(null);
+  const { toast } = useToast();
 
   const { data: orders, isLoading } = useQuery<OrderWithCustomer[]>({
     queryKey: ["/api/orders"],
+  });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/orders/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Order deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      setDeleteDialogOpen(false);
+      setOrderToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete order",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredOrders = orders?.filter(order => 
@@ -165,25 +206,40 @@ export default function Orders() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => console.log('View order:', order.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                setEditingOrder(order);
+                                setShowOrderModal(true);
+                              }}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 View Order
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => console.log('Edit order:', order.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                setEditingOrder(order);
+                                setShowOrderModal(true);
+                              }}>
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit Order
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => console.log('Track items:', order.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                // Navigate to inventory returns with order filter
+                                window.location.href = `/inventory-returns?order=${order.id}`;
+                              }}>
                                 <Package className="w-4 h-4 mr-2" />
                                 Track Items
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => console.log('Generate invoice:', order.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                // Navigate to invoices page with order filter
+                                window.location.href = `/invoices?order=${order.id}`;
+                              }}>
                                 <FileText className="w-4 h-4 mr-2" />
                                 Generate Invoice
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
-                                onClick={() => console.log('Cancel order:', order.id)}
+                                onClick={() => {
+                                  setOrderToDelete(order);
+                                  setDeleteDialogOpen(true);
+                                }}
                                 className="text-red-600"
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
@@ -204,8 +260,43 @@ export default function Orders() {
 
       <OrderModal 
         open={showOrderModal} 
-        onOpenChange={setShowOrderModal}
+        onOpenChange={(open) => {
+          setShowOrderModal(open);
+          if (!open) setEditingOrder(null);
+        }}
+        editingOrder={editingOrder}
       />
+
+      <ReturnChallanModal
+        open={showReturnModal}
+        onOpenChange={setShowReturnModal}
+        gstInvoice={selectedInvoice}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order "{orderToDelete?.orderNumber}"? This action cannot be undone and will permanently remove the order and return all allocated inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (orderToDelete) {
+                  deleteOrderMutation.mutate(orderToDelete.id);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteOrderMutation.isPending}
+            >
+              {deleteOrderMutation.isPending ? "Cancelling..." : "Cancel Order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
