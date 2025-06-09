@@ -560,6 +560,7 @@ export class DatabaseStorage implements IStorage {
         const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
         return {
+          invoiceId: 0, // Will be set after invoice creation
           itemId: item.itemId,
           quantity: item.quantity,
           ratePerDay: item.ratePerDay,
