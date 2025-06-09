@@ -36,14 +36,22 @@ const categories = [
 interface InventoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editingItem?: any;
 }
 
-export function InventoryModal({ open, onOpenChange }: InventoryModalProps) {
+export function InventoryModal({ open, onOpenChange, editingItem }: InventoryModalProps) {
   const { toast } = useToast();
 
   const form = useForm<InventoryFormData>({
     resolver: zodResolver(inventorySchema),
-    defaultValues: {
+    defaultValues: editingItem ? {
+      name: editingItem.name,
+      description: editingItem.description || "",
+      category: editingItem.category,
+      totalStock: editingItem.totalStock,
+      availableStock: editingItem.availableStock,
+      ratePerDay: editingItem.ratePerDay,
+    } : {
       name: "",
       description: "",
       category: "",
@@ -70,6 +78,28 @@ export function InventoryModal({ open, onOpenChange }: InventoryModalProps) {
       toast({
         title: "Error",
         description: error.message || "Failed to create inventory item",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateInventoryMutation = useMutation({
+    mutationFn: async (data: InventoryFormData) => {
+      return apiRequest("PUT", `/api/inventory/${editingItem.id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Inventory item updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      onOpenChange(false);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update inventory item",
         variant: "destructive",
       });
     },

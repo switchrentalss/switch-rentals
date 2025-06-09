@@ -48,6 +48,7 @@ function getMaintenanceStatus(status: string): { label: string; variant: "defaul
 
 export default function Inventory() {
   const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: inventory, isLoading } = useQuery<InventoryItem[]>({
@@ -189,15 +190,24 @@ export default function Inventory() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => console.log('View item:', item.id)}>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingItem(item);
+                                  setShowInventoryModal(true);
+                                }}>
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => console.log('Edit item:', item.id)}>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingItem(item);
+                                  setShowInventoryModal(true);
+                                }}>
                                   <Edit className="w-4 h-4 mr-2" />
                                   Edit Item
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => console.log('Adjust stock:', item.id)}>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingItem(item);
+                                  setShowInventoryModal(true);
+                                }}>
                                   <Settings className="w-4 h-4 mr-2" />
                                   Adjust Stock
                                 </DropdownMenuItem>
@@ -225,7 +235,11 @@ export default function Inventory() {
 
       <InventoryModal 
         open={showInventoryModal} 
-        onOpenChange={setShowInventoryModal}
+        onOpenChange={(open) => {
+          setShowInventoryModal(open);
+          if (!open) setEditingItem(null);
+        }}
+        editingItem={editingItem}
       />
     </div>
   );
