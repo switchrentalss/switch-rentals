@@ -3,8 +3,9 @@ import {
   inventoryItems, 
   orders, 
   orderItems,
-  quotes,
-  damageReports,
+  invoices,
+  invoiceItems,
+  inventoryReturns,
   type Customer, 
   type InsertCustomer,
   type InventoryItem,
@@ -14,7 +15,14 @@ import {
   type OrderItem,
   type InsertOrderItem,
   type OrderWithCustomer,
-  type DashboardMetrics
+  type DashboardMetrics,
+  type Invoice,
+  type InsertInvoice,
+  type InvoiceItem,
+  type InsertInvoiceItem,
+  type InvoiceWithCustomer,
+  type InventoryReturn,
+  type InsertInventoryReturn
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -62,6 +70,7 @@ export interface IStorage {
   updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined>;
   deleteInvoice(id: number): Promise<boolean>;
   convertQuoteToInvoice(quoteId: number, invoiceType: string): Promise<InvoiceWithCustomer>;
+  processReturnsAndCreateFinalInvoice(invoiceId: number, returns: any[]): Promise<InvoiceWithCustomer>;
 
   // Inventory Returns
   getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]>;
@@ -519,7 +528,8 @@ export class DatabaseStorage implements IStorage {
 
   async convertQuoteToInvoice(quoteId: number, invoiceType: string): Promise<InvoiceWithCustomer> {
     try {
-      const quote = await this.getQuote(quoteId);
+      // Get the original invoice (quote)
+      const quote = await this.getInvoice(quoteId);
       if (!quote) {
         throw new Error('Quote not found');
       }
@@ -527,6 +537,7 @@ export class DatabaseStorage implements IStorage {
       const invoiceData: InsertInvoice = {
         customerId: quote.customerId,
         quoteId: quoteId,
+        invoiceNumber: this.generateInvoiceNumber(invoiceType),
         invoiceType: invoiceType as any,
         eventDate: quote.eventDate,
         startDate: quote.startDate,
@@ -536,11 +547,12 @@ export class DatabaseStorage implements IStorage {
         gstRate: quote.gstRate,
         gstAmount: quote.gstAmount,
         totalAmount: quote.totalAmount,
-        status: 'draft',
+        status: invoiceType === 'quotation' ? 'draft' : 'sent',
         terms: quote.terms,
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       };
 
-      const invoiceItemsData: InsertInvoiceItem[] = quote.items.map(item => {
+      const invoiceItemsData: InsertInvoiceItem[] = quote.items?.map((item: any) => {
         const startDate = new Date(quote.startDate);
         const endDate = new Date(quote.endDate);
         const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -550,16 +562,116 @@ export class DatabaseStorage implements IStorage {
           quantity: item.quantity,
           ratePerDay: item.ratePerDay,
           days: days,
-          lineTotal: item.totalAmount,
+          lineTotal: item.lineTotal || item.totalAmount,
         };
-      });
+      }) || [];
 
       const createdInvoice = await this.createInvoice(invoiceData, invoiceItemsData);
-      await this.updateQuote(quoteId, { status: 'converted' });
+      
+      // Update original quote status if converting from quotation
+      if (quote.invoiceType === 'quotation') {
+        await this.updateInvoice(quoteId, { status: 'converted' });
+      }
 
       return createdInvoice;
     } catch (error) {
       console.error('Error converting quote to invoice:', error);
+      throw error;
+    }
+  }
+
+  private generateInvoiceNumber(invoiceType: string): string {
+    const prefixes = {
+      quotation: 'QUO',
+      proforma: 'PRO', 
+      gst_invoice: 'GST',
+      final_invoice: 'FIN'
+    };
+    
+    const prefix = (prefixes as any)[invoiceType] || 'INV';
+    const timestamp = Date.now();
+    const counter = Math.floor(Math.random() * 1000);
+    
+    return `${prefix}-${String(counter).padStart(4, '0')}`;
+  }
+
+  async processReturnsAndCreateFinalInvoice(invoiceId: number, returns: any[]): Promise<InvoiceWithCustomer> {
+    try {
+      // Get the original GST invoice
+      const gstInvoice = await this.getInvoice(invoiceId);
+      if (!gstInvoice) {
+        throw new Error("GST Invoice not found");
+      }
+
+      // Calculate penalty amounts for damaged/missing items
+      let totalPenaltyAmount = 0;
+      const penaltyItems: any[] = [];
+
+      for (const returnItem of returns) {
+        if (returnItem.conditionStatus === 'damaged' || returnItem.conditionStatus === 'missing') {
+          const penaltyAmount = parseFloat(returnItem.penaltyAmount || '0');
+          totalPenaltyAmount += penaltyAmount;
+          
+          if (penaltyAmount > 0) {
+            penaltyItems.push({
+              itemId: returnItem.itemId,
+              quantity: returnItem.quantityDamaged || returnItem.quantityMissing || 1,
+              ratePerDay: penaltyAmount.toFixed(2),
+              days: 1,
+              lineTotal: penaltyAmount.toFixed(2)
+            });
+          }
+        }
+        
+        // Create inventory return record
+        await this.createInventoryReturn({
+          orderId: gstInvoice.orderId || 0,
+          itemId: returnItem.itemId,
+          quantityShipped: returnItem.quantityShipped,
+          quantityReturned: returnItem.quantityReturned,
+          conditionStatus: returnItem.conditionStatus,
+          damageNotes: returnItem.damageNotes,
+          penaltyAmount: returnItem.penaltyAmount || '0',
+          checkedBy: returnItem.checkedBy || 'System',
+          returnDate: new Date().toISOString().split('T')[0]
+        });
+      }
+
+      // Create final invoice with penalty charges
+      const finalInvoiceData: InsertInvoice = {
+        customerId: gstInvoice.customerId,
+        quoteId: gstInvoice.quoteId,
+        invoiceNumber: this.generateInvoiceNumber('final_invoice'),
+        invoiceType: 'final_invoice',
+        eventDate: gstInvoice.eventDate,
+        startDate: gstInvoice.startDate,
+        endDate: gstInvoice.endDate,
+        eventDetails: `${gstInvoice.eventDetails} - Final Settlement with Return Processing`,
+        subtotal: totalPenaltyAmount.toFixed(2),
+        gstRate: '18',
+        gstAmount: (totalPenaltyAmount * 0.18).toFixed(2),
+        totalAmount: (totalPenaltyAmount * 1.18).toFixed(2),
+        status: 'sent',
+        terms: 'Final settlement invoice. Penalties applied for damaged/missing items as per rental agreement.',
+        dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      };
+
+      const finalInvoiceItems = penaltyItems.map(item => ({
+        itemId: item.itemId,
+        quantity: item.quantity,
+        ratePerDay: item.ratePerDay,
+        days: item.days,
+        lineTotal: item.lineTotal
+      }));
+
+      const finalInvoice = await this.createInvoice(finalInvoiceData, finalInvoiceItems);
+
+      // Update GST invoice status to completed
+      await this.updateInvoice(invoiceId, { status: 'completed' });
+
+      return finalInvoice;
+    } catch (error) {
+      console.error('Error processing returns and creating final invoice:', error);
       throw error;
     }
   }

@@ -254,6 +254,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Invoice routes
+  app.get("/api/invoices", async (req, res) => {
+    try {
+      const type = req.query.type as string;
+      const invoices = await storage.getInvoices(type);
+      res.json(invoices);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch invoices" });
+    }
+  });
+
+  app.get("/api/invoices/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const invoice = await storage.getInvoice(id);
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
+  app.post("/api/invoices", async (req, res) => {
+    try {
+      const { invoice, items } = req.body;
+      
+      const createdInvoice = await storage.createInvoice(invoice, items);
+      res.status(201).json(createdInvoice);
+    } catch (error) {
+      console.error("Invoice creation error:", error);
+      res.status(500).json({ message: "Failed to create invoice" });
+    }
+  });
+
+  app.post("/api/invoices/:id/convert", async (req, res) => {
+    try {
+      const quoteId = parseInt(req.params.id);
+      const { invoiceType } = req.body;
+      
+      const convertedInvoice = await storage.convertQuoteToInvoice(quoteId, invoiceType);
+      res.json(convertedInvoice);
+    } catch (error) {
+      console.error("Invoice conversion error:", error);
+      res.status(500).json({ message: "Failed to convert invoice" });
+    }
+  });
+
+  app.put("/api/invoices/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const invoiceData = req.body;
+      
+      const invoice = await storage.updateInvoice(id, invoiceData);
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update invoice" });
+    }
+  });
+
+  // Inventory Returns routes
+  app.get("/api/inventory-returns", async (req, res) => {
+    try {
+      const orderId = req.query.orderId ? parseInt(req.query.orderId as string) : undefined;
+      const returns = await storage.getInventoryReturns(orderId);
+      res.json(returns);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch inventory returns" });
+    }
+  });
+
+  app.post("/api/inventory-returns", async (req, res) => {
+    try {
+      const returnData = req.body;
+      const inventoryReturn = await storage.createInventoryReturn(returnData);
+      res.status(201).json(inventoryReturn);
+    } catch (error) {
+      console.error("Return creation error:", error);
+      res.status(500).json({ message: "Failed to create inventory return" });
+    }
+  });
+
+  app.put("/api/inventory-returns/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const returnData = req.body;
+      
+      const inventoryReturn = await storage.updateInventoryReturn(id, returnData);
+      if (!inventoryReturn) {
+        return res.status(404).json({ message: "Inventory return not found" });
+      }
+      
+      res.json(inventoryReturn);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update inventory return" });
+    }
+  });
+
+  // Return Challan Processing
+  app.post("/api/invoices/:id/process-returns", async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const { returns } = req.body;
+      
+      // Process each return and create final settlement invoice
+      const finalInvoice = await storage.processReturnsAndCreateFinalInvoice(invoiceId, returns);
+      res.json(finalInvoice);
+    } catch (error) {
+      console.error("Return processing error:", error);
+      res.status(500).json({ message: "Failed to process returns" });
+    }
+  });
+
   // Dashboard metrics
   app.get("/api/dashboard/metrics", async (req, res) => {
     try {
