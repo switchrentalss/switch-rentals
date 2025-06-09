@@ -130,6 +130,8 @@ export class DatabaseStorage implements IStorage {
   async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
     const [newItem] = await db.insert(inventoryItems).values({
       ...item,
+      sku: item.sku || null,
+      itemCode: item.itemCode || null,
       description: item.description || null,
       subcategory: item.subcategory || null,
       outStock: item.totalStock - item.availableStock,
