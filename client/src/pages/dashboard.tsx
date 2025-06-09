@@ -214,7 +214,7 @@ export default function Dashboard() {
                   <ClipboardList className="w-4 h-4 mr-2" />
                   Create New Order
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start" onClick={() => window.location.href = "/inventory"}>
                   <Package className="w-4 h-4 mr-2" />
                   Update Inventory
                 </Button>
@@ -279,16 +279,16 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[800px]">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Stock</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Out</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Day</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Out</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Day</th>
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -296,23 +296,23 @@ export default function Dashboard() {
                       const stockStatus = getStockStatus(item);
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="w-8 h-8 bg-gray-200 rounded-lg mr-3 flex items-center justify-center">
                                 <Package className="w-4 h-4 text-gray-500" />
                               </div>
                               <div>
                                 <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                                <div className="text-sm text-gray-500">{item.description}</div>
+                                <div className="text-sm text-gray-500 hidden md:block">{item.description}</div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.category}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">{item.availableStock}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.totalStock - item.availableStock}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{item.ratePerDay}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{item.category}</td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-green-600">{item.availableStock}</td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">{item.totalStock - item.availableStock}</td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{item.ratePerDay}</td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                             <Badge variant={stockStatus.variant}>
                               {stockStatus.status}
                             </Badge>

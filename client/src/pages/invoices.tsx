@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Header } from "@/components/layout/header";
-import { generatePDF } from "@/utils/pdf-generator";
+import { generateInvoicePDF } from "@/utils/pdf-generator";
 import { QuotationModal } from "@/components/modals/quotation-modal";
 import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { ReturnTrackingModal } from "@/components/modals/return-tracking-modal";

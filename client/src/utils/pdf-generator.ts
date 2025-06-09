@@ -1,171 +1,207 @@
-// PDF Generation utility for Indian GST invoices
-export const generatePDF = async (invoice: any, type: 'quotation' | 'proforma' | 'gst_invoice' | 'final_invoice') => {
-  const companyDetails = {
-    name: "SWITCH RENTAL SERVICES LLP",
-    address: "Ground Floor, Gupta Mills Estate,\nMagazine Street,\nDarukhana, Mazgaon,\nMumbai, 400010\nMaharashtra, India",
-    gstin: "27AFHFS2025K1ZV",
-    phone: "+91 9876543210",
-    email: "info@switchrental.com"
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
+
+interface InvoiceData {
+  id: number;
+  invoiceNumber: string;
+  invoiceType: string;
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    company?: string;
+    gstNumber?: string;
   };
+  dispatchDate: string;
+  startDate: string;
+  endDate: string;
+  items: Array<{
+    item: {
+      name: string;
+      description?: string;
+    };
+    quantity: number;
+    ratePerDay: string;
+    days: number;
+    lineTotal: string;
+  }>;
+  subtotal: string;
+  gstAmount: string;
+  totalAmount: string;
+  depositAmount?: string;
+  sampleType?: string;
+  notes?: string;
+  terms?: string;
+}
 
-  // Create a professional invoice HTML template
-  const invoiceHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>${type.toUpperCase().replace('_', ' ')} - ${invoice.invoiceNumber}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; font-size: 12px; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-        .company-info { flex: 1; }
-        .company-name { font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 5px; }
-        .invoice-type { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 20px; text-transform: uppercase; }
-        .invoice-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .customer-details { margin-bottom: 20px; }
-        .table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .table th { background-color: #f8f9fa; font-weight: bold; }
-        .text-right { text-align: right; }
-        .total-section { margin-top: 20px; }
-        .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
-        .total-row.final { font-weight: bold; font-size: 14px; border-top: 2px solid #000; margin-top: 10px; padding-top: 10px; }
-        .terms { margin-top: 30px; font-size: 10px; }
-        .signature { margin-top: 50px; text-align: right; }
-        .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 72px; color: rgba(0,0,0,0.1); z-index: -1; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div class="company-info">
-          <div class="company-name">${companyDetails.name}</div>
-          <div>${companyDetails.address}</div>
-          <div>GSTIN: ${companyDetails.gstin}</div>
-          <div>Phone: ${companyDetails.phone}</div>
-          <div>Email: ${companyDetails.email}</div>
-        </div>
-        <div>
-          <div style="text-align: right;">
-            <div><strong>${invoice.invoiceNumber}</strong></div>
-            <div>Date: ${new Date(invoice.createdAt).toLocaleDateString('en-IN')}</div>
-            ${type === 'quotation' ? '<div style="color: #dc2626;">QUOTATION</div>' : ''}
-            ${type === 'proforma' ? '<div style="color: #7c3aed;">PROFORMA INVOICE</div>' : ''}
-            ${type === 'gst_invoice' ? '<div style="color: #059669;">GST INVOICE</div>' : ''}
-            ${type === 'final_invoice' ? '<div style="color: #ea580c;">FINAL INVOICE</div>' : ''}
-          </div>
-        </div>
-      </div>
+export function generateInvoicePDF(invoiceData: InvoiceData) {
+  const doc = new jsPDF();
+  
+  // Set up colors
+  const primaryColor: [number, number, number] = [41, 128, 185]; // Blue
+  const darkGray: [number, number, number] = [44, 62, 80];
+  const lightGray: [number, number, number] = [189, 195, 199];
+  
+  // Header - Company Information
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, 210, 50, 'F');
+  
+  // Company Logo/Name
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SWITCH RENTAL SERVICES LLP', 20, 25);
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Luxury Dining & Event Equipment Rental', 20, 35);
+  doc.text('GSTIN: 27AFHFS2025K1ZV', 20, 42);
+  
+  // Invoice Title
+  doc.setTextColor(...darkGray);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text(invoiceData.invoiceType.toUpperCase(), 150, 25);
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Invoice #: ${invoiceData.invoiceNumber}`, 150, 35);
+  doc.text(`Date: ${format(new Date(invoiceData.dispatchDate), 'dd/MM/yyyy')}`, 150, 42);
+  
+  // Customer Information
+  let yPos = 70;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Bill To:', 20, yPos);
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(invoiceData.customer.name, 20, yPos + 10);
+  
+  if (invoiceData.customer.company) {
+    doc.text(invoiceData.customer.company, 20, yPos + 20);
+    yPos += 10;
+  }
+  
+  doc.text(invoiceData.customer.address, 20, yPos + 20);
+  doc.text(`Phone: ${invoiceData.customer.phone}`, 20, yPos + 30);
+  doc.text(`Email: ${invoiceData.customer.email}`, 20, yPos + 40);
+  
+  if (invoiceData.customer.gstNumber) {
+    doc.text(`GST Number: ${invoiceData.customer.gstNumber}`, 20, yPos + 50);
+    yPos += 10;
+  }
+  
+  // Event Details
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Event Details:', 120, 70);
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Dispatch Date: ${format(new Date(invoiceData.dispatchDate), 'dd/MM/yyyy')}`, 120, 85);
+  doc.text(`Event Start: ${format(new Date(invoiceData.startDate), 'dd/MM/yyyy')}`, 120, 95);
+  doc.text(`Event End: ${format(new Date(invoiceData.endDate), 'dd/MM/yyyy')}`, 120, 105);
+  
+  // Items Table
+  const tableStartY = yPos + 70;
+  
+  const tableData = invoiceData.items.map(item => [
+    item.item.name,
+    item.quantity.toString(),
+    `₹${item.ratePerDay}`,
+    item.days.toString(),
+    `₹${item.lineTotal}`
+  ]);
+  
+  autoTable(doc, {
+    startY: tableStartY,
+    head: [['Item Description', 'Qty', 'Rate/Day', 'Days', 'Amount']],
+    body: tableData,
+    theme: 'grid',
+    styles: {
+      fontSize: 9,
+      cellPadding: 5,
+    },
+    headStyles: {
+      fillColor: primaryColor,
+      textColor: [255, 255, 255],
+      fontSize: 10,
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 70 },
+      1: { cellWidth: 20, halign: 'center' },
+      2: { cellWidth: 30, halign: 'right' },
+      3: { cellWidth: 20, halign: 'center' },
+      4: { cellWidth: 30, halign: 'right' },
+    },
+  });
+  
+  // Totals
+  const finalY = (doc as any).lastAutoTable.finalY + 20;
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  
+  let totalsY = finalY;
+  doc.text('Subtotal:', 140, totalsY);
+  doc.text(`₹${invoiceData.subtotal}`, 170, totalsY);
+  
+  if (invoiceData.sampleType === 'paid') {
+    totalsY += 10;
+    doc.text('Sample Charges (10%):', 140, totalsY);
+    doc.text(`₹${(parseFloat(invoiceData.subtotal) * 0.1).toFixed(2)}`, 170, totalsY);
+  }
+  
+  if (invoiceData.depositAmount && parseFloat(invoiceData.depositAmount) > 0) {
+    totalsY += 10;
+    doc.text('Security Deposit:', 140, totalsY);
+    doc.text(`₹${invoiceData.depositAmount}`, 170, totalsY);
+  }
+  
+  totalsY += 10;
+  doc.text('GST (18%):', 140, totalsY);
+  doc.text(`₹${invoiceData.gstAmount}`, 170, totalsY);
+  
+  // Total line
+  totalsY += 15;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setFillColor(...lightGray);
+  doc.rect(130, totalsY - 8, 60, 15, 'F');
+  doc.text('Total Amount:', 140, totalsY);
+  doc.text(`₹${invoiceData.totalAmount}`, 170, totalsY);
+  
+  // Terms and Conditions
+  if (invoiceData.terms) {
+    totalsY += 30;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Terms & Conditions:', 20, totalsY);
+    
+    doc.setFont('helvetica', 'normal');
+    const terms = invoiceData.terms.split('\n');
+    terms.forEach((term, index) => {
+      doc.text(term, 20, totalsY + 10 + (index * 8));
+    });
+  }
+  
+  // Footer
+  const pageHeight = doc.internal.pageSize.height;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...lightGray);
+  doc.text('Thank you for choosing Switch Rental Services LLP', 20, pageHeight - 20);
+  doc.text('Contact: +91-XXXXXXXXXX | Email: info@switchrental.com', 20, pageHeight - 10);
+  
+  // Save the PDF
+  const fileName = `${invoiceData.invoiceType}-${invoiceData.invoiceNumber}.pdf`;
+  doc.save(fileName);
+}
 
-      <div class="invoice-type">${type.replace('_', ' ').toUpperCase()}</div>
-
-      <div class="invoice-details">
-        <div style="display: flex; justify-content: space-between;">
-          <div>
-            <strong>Bill To:</strong><br>
-            ${invoice.customer?.name}<br>
-            ${invoice.customer?.company || ''}<br>
-            ${invoice.customer?.email}<br>
-            ${invoice.customer?.phone || ''}
-          </div>
-          <div style="text-align: right;">
-            <strong>Dispatch Date:</strong> ${new Date(invoice.dispatchDate).toLocaleDateString('en-IN')}<br>
-            <strong>Rental Period:</strong> ${new Date(invoice.startDate).toLocaleDateString('en-IN')} to ${new Date(invoice.endDate).toLocaleDateString('en-IN')}<br>
-            <strong>Event Details:</strong> ${invoice.eventDetails}
-          </div>
-        </div>
-      </div>
-
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Sr. No.</th>
-            <th>Description of Goods</th>
-            <th>HSN/SAC</th>
-            <th>Quantity</th>
-            <th>Rate per Day</th>
-            <th>Days</th>
-            <th>Amount (₹)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${invoice.items?.map((item: any, index: number) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${item.item?.name || 'Item'}</td>
-              <td>9965</td>
-              <td class="text-right">${item.quantity}</td>
-              <td class="text-right">₹${parseFloat(item.ratePerDay).toFixed(2)}</td>
-              <td class="text-right">${item.days}</td>
-              <td class="text-right">₹${parseFloat(item.lineTotal).toFixed(2)}</td>
-            </tr>
-          `).join('') || ''}
-        </tbody>
-      </table>
-
-      <div class="total-section">
-        <div style="float: right; width: 300px;">
-          <div class="total-row">
-            <span>Subtotal:</span>
-            <span>₹${parseFloat(invoice.subtotal).toFixed(2)}</span>
-          </div>
-          ${invoice.sampleType === 'paid' ? `
-          <div class="total-row">
-            <span>Sample Charges (10%):</span>
-            <span>₹${(parseFloat(invoice.subtotal) * 0.1).toFixed(2)}</span>
-          </div>` : ''}
-          ${parseFloat(invoice.depositAmount || 0) > 0 ? `
-          <div class="total-row">
-            <span>Security Deposit:</span>
-            <span>₹${parseFloat(invoice.depositAmount).toFixed(2)}</span>
-          </div>` : ''}
-          <div class="total-row">
-            <span>CGST (${parseFloat(invoice.gstRate)/2}%):</span>
-            <span>₹${(parseFloat(invoice.gstAmount)/2).toFixed(2)}</span>
-          </div>
-          <div class="total-row">
-            <span>SGST (${parseFloat(invoice.gstRate)/2}%):</span>
-            <span>₹${(parseFloat(invoice.gstAmount)/2).toFixed(2)}</span>
-          </div>
-          <div class="total-row final">
-            <span>Total Amount:</span>
-            <span>₹${parseFloat(invoice.totalAmount).toFixed(2)}</span>
-          </div>
-        </div>
-        <div style="clear: both;"></div>
-      </div>
-
-      <div class="terms">
-        <strong>Terms & Conditions:</strong><br>
-        ${invoice.terms || 'Payment Terms: 50% advance, balance on delivery. Security deposit refundable after return of items in good condition.'}
-        <br><br>
-        ${invoice.notes ? `<strong>Notes:</strong><br>${invoice.notes}<br><br>` : ''}
-        
-        <strong>Declaration:</strong><br>
-        We declare that this invoice shows the actual price of goods described and that all particulars are true and correct.
-      </div>
-
-      <div class="signature">
-        <div style="margin-top: 50px;">
-          <div>For ${companyDetails.name}</div>
-          <div style="margin-top: 40px; border-top: 1px solid #000; width: 200px; margin-left: auto;">Authorized Signatory</div>
-        </div>
-      </div>
-
-      ${type === 'quotation' ? '<div class="watermark">QUOTATION</div>' : ''}
-    </body>
-    </html>
-  `;
-
-  // Create a blob and download
-  const blob = new Blob([invoiceHTML], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${invoice.invoiceNumber}-${type}.html`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-
-  return true;
-};
+export function downloadQuotationPDF(quotationData: any) {
+  generateInvoicePDF(quotationData);
+}
