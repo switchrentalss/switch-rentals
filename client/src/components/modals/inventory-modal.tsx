@@ -114,7 +114,11 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
       return;
     }
     
-    createInventoryMutation.mutate(data);
+    if (editingItem) {
+      updateInventoryMutation.mutate(data);
+    } else {
+      createInventoryMutation.mutate(data);
+    }
   };
 
   // Sync available stock with total stock when total stock changes
@@ -134,7 +138,7 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add New Inventory Item</DialogTitle>
+          <DialogTitle>{editingItem ? 'Edit Inventory Item' : 'Add New Inventory Item'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>

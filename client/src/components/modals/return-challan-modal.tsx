@@ -1,130 +1,158 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { queryClient } from "@/lib/queryClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Package2, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { CheckCircle, AlertTriangle, XCircle, Package } from "lucide-react";
+import type { InvoiceWithCustomer } from "@shared/schema";
 
-const returnSchema = z.object({
+interface ReturnItem {
+  itemId: number;
+  itemName: string;
+  quantityShipped: number;
+  quantityReturned: number;
+  conditionStatus: 'perfect' | 'damaged' | 'missing' | 'needs_cleaning';
+  damageNotes?: string;
+  penaltyAmount: number;
+}
+
+const returnChallanSchema = z.object({
   returns: z.array(z.object({
     itemId: z.number(),
-    quantityShipped: z.number(),
-    quantityReturned: z.number(),
+    quantityReturned: z.number().min(0),
     conditionStatus: z.enum(['perfect', 'damaged', 'missing', 'needs_cleaning']),
     damageNotes: z.string().optional(),
-    penaltyAmount: z.string().optional(),
-    checkedBy: z.string().min(1, "Inspector name required")
-  })).min(1, "At least one return item required")
+    penaltyAmount: z.number().min(0).default(0),
+  }))
 });
 
-type ReturnFormData = z.infer<typeof returnSchema>;
+type ReturnChallanFormData = z.infer<typeof returnChallanSchema>;
 
 interface ReturnChallanModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  gstInvoice: any;
+  gstInvoice: InvoiceWithCustomer | null;
 }
 
 export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnChallanModalProps) {
   const { toast } = useToast();
-  
-  const form = useForm<ReturnFormData>({
-    resolver: zodResolver(returnSchema),
+  const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
+
+  const form = useForm<ReturnChallanFormData>({
+    resolver: zodResolver(returnChallanSchema),
     defaultValues: {
-      returns: gstInvoice?.items?.map((item: any) => ({
+      returns: []
+    },
+  });
+
+  // Initialize return items when invoice is loaded
+  useState(() => {
+    if (gstInvoice && gstInvoice.items) {
+      const initialItems: ReturnItem[] = gstInvoice.items.map(item => ({
         itemId: item.itemId,
+        itemName: item.item.name,
         quantityShipped: item.quantity,
-        quantityReturned: item.quantity,
+        quantityReturned: item.quantity, // Default to full return
         conditionStatus: 'perfect',
         damageNotes: '',
-        penaltyAmount: '0',
-        checkedBy: ''
-      })) || []
+        penaltyAmount: 0,
+      }));
+      setReturnItems(initialItems);
     }
   });
 
-  const processReturns = useMutation({
-    mutationFn: async (data: ReturnFormData) => {
-      const response = await fetch(`/api/invoices/${gstInvoice.id}/process-returns`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ returns: data.returns })
+  const processReturnsMutation = useMutation({
+    mutationFn: async (data: ReturnChallanFormData) => {
+      return apiRequest("POST", `/api/invoices/${gstInvoice?.id}/process-returns`, {
+        returns: data.returns
       });
-      if (!response.ok) throw new Error("Failed to process returns");
-      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory-returns"] });
       toast({
         title: "Success",
-        description: "Return challan processed and final invoice generated"
+        description: "Return challan processed and final invoice generated",
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-returns"] });
       onOpenChange(false);
-      form.reset();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to process return challan",
-        variant: "destructive"
+        description: error.message || "Failed to process returns",
+        variant: "destructive",
       });
-    }
+    },
   });
 
-  const getConditionIcon = (status: string) => {
-    switch (status) {
-      case 'perfect': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'damaged': return <AlertTriangle className="h-4 w-4 text-orange-500" />;
-      case 'missing': return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'needs_cleaning': return <Package2 className="h-4 w-4 text-blue-500" />;
-      default: return null;
-    }
-  };
-
-  const getConditionBadge = (status: string) => {
-    switch (status) {
-      case 'perfect': return <Badge variant="default" className="bg-green-100 text-green-800">Perfect</Badge>;
-      case 'damaged': return <Badge variant="destructive">Damaged</Badge>;
-      case 'missing': return <Badge variant="destructive">Missing</Badge>;
-      case 'needs_cleaning': return <Badge variant="secondary">Needs Cleaning</Badge>;
-      default: return null;
-    }
-  };
-
-  const calculatePenaltyAmount = (index: number, status: string) => {
-    const returns = form.getValues("returns");
-    const returnItem = returns[index];
-    const originalItem = gstInvoice?.items?.find((item: any) => item.itemId === returnItem.itemId);
+  const updateReturnItem = (index: number, updates: Partial<ReturnItem>) => {
+    const updatedItems = [...returnItems];
+    updatedItems[index] = { ...updatedItems[index], ...updates };
     
-    if (status === 'damaged') {
-      // 50% of original rate per day for damaged items
-      const penaltyRate = originalItem ? parseFloat(originalItem.ratePerDay) * 0.5 : 0;
-      form.setValue(`returns.${index}.penaltyAmount`, penaltyRate.toFixed(2));
-    } else if (status === 'missing') {
-      // 100% of original rate per day for missing items
-      const penaltyRate = originalItem ? parseFloat(originalItem.ratePerDay) : 0;
-      form.setValue(`returns.${index}.penaltyAmount`, penaltyRate.toFixed(2));
+    // Calculate penalty for damaged/missing items
+    if (updates.conditionStatus === 'damaged' || updates.conditionStatus === 'missing') {
+      const item = gstInvoice?.items.find(i => i.itemId === updatedItems[index].itemId);
+      if (item?.item.replacementCost) {
+        const penaltyRate = updates.conditionStatus === 'missing' ? 1.0 : 0.5; // 100% for missing, 50% for damaged
+        updatedItems[index].penaltyAmount = parseFloat(item.item.replacementCost) * penaltyRate;
+      }
     } else {
-      form.setValue(`returns.${index}.penaltyAmount`, '0');
+      updatedItems[index].penaltyAmount = 0;
+    }
+    
+    setReturnItems(updatedItems);
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'perfect':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'damaged':
+        return <AlertTriangle className="w-4 h-4 text-orange-600" />;
+      case 'missing':
+        return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'needs_cleaning':
+        return <Package className="w-4 h-4 text-blue-600" />;
+      default:
+        return null;
     }
   };
 
-  const onSubmit = (data: ReturnFormData) => {
-    processReturns.mutate(data);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'perfect': return 'text-green-600 bg-green-50 border-green-200';
+      case 'damaged': return 'text-orange-600 bg-orange-50 border-orange-200';
+      case 'missing': return 'text-red-600 bg-red-50 border-red-200';
+      case 'needs_cleaning': return 'text-blue-600 bg-blue-50 border-blue-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
   };
+
+  const onSubmit = (data: ReturnChallanFormData) => {
+    const returnsData = returnItems.map(item => ({
+      itemId: item.itemId,
+      quantityReturned: item.quantityReturned,
+      conditionStatus: item.conditionStatus,
+      damageNotes: item.damageNotes || '',
+      penaltyAmount: item.penaltyAmount,
+    }));
+
+    processReturnsMutation.mutate({ returns: returnsData });
+  };
+
+  const totalPenalty = returnItems.reduce((sum, item) => sum + item.penaltyAmount, 0);
+  const perfectItems = returnItems.filter(item => item.conditionStatus === 'perfect').length;
+  const damagedItems = returnItems.filter(item => item.conditionStatus === 'damaged').length;
+  const missingItems = returnItems.filter(item => item.conditionStatus === 'missing').length;
+  const cleaningItems = returnItems.filter(item => item.conditionStatus === 'needs_cleaning').length;
 
   if (!gstInvoice) return null;
 
@@ -132,231 +160,210 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <Package2 className="h-5 w-5 mr-2" />
-            Return Challan Processing - {gstInvoice.invoiceNumber}
-          </DialogTitle>
-          <DialogDescription>
+          <DialogTitle>Return Challan Processing - {gstInvoice.invoiceNumber}</DialogTitle>
+          <p className="text-sm text-gray-600">
             Process returned inventory items and generate final settlement invoice
-          </DialogDescription>
+          </p>
         </DialogHeader>
 
+        {/* Customer and Event Details */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card>
-            <CardContent className="pt-4">
-              <div className="text-sm text-gray-600">Customer</div>
-              <div className="font-semibold">{gstInvoice.customer?.name}</div>
-              <div className="text-sm text-gray-500">{gstInvoice.customer?.company}</div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Customer</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm font-medium">{gstInvoice.customer.name}</div>
+              <div className="text-xs text-gray-500">{gstInvoice.customer.company}</div>
             </CardContent>
           </Card>
+          
           <Card>
-            <CardContent className="pt-4">
-              <div className="text-sm text-gray-600">Event Details</div>
-              <div className="font-semibold">{gstInvoice.eventDetails}</div>
-              <div className="text-sm text-gray-500">{gstInvoice.eventDate}</div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Event Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm font-medium">{gstInvoice.eventDetails}</div>
             </CardContent>
           </Card>
+          
           <Card>
-            <CardContent className="pt-4">
-              <div className="text-sm text-gray-600">Invoice Total</div>
-              <div className="font-semibold">₹{gstInvoice.totalAmount}</div>
-              <div className="text-sm text-gray-500">GST Invoice</div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Invoice Total</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-bold">₹{gstInvoice.totalAmount}</div>
+              <div className="text-xs text-gray-500">GST Invoice</div>
             </CardContent>
           </Card>
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Inventory Return Processing</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {form.watch("returns").map((returnItem, index) => {
-                  const originalItem = gstInvoice?.items?.find((item: any) => item.itemId === returnItem.itemId);
-                  return (
-                    <div key={index} className="border rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium">{originalItem?.item?.name || 'Unknown Item'}</h4>
-                          <p className="text-sm text-gray-500">
-                            Code: {originalItem?.item?.productCode} | Rate: ₹{originalItem?.ratePerDay}/day
-                          </p>
-                        </div>
-                        {getConditionBadge(returnItem.conditionStatus)}
-                      </div>
+        {/* Return Summary */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Return Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <div>
+                  <div className="text-2xl font-bold">{perfectItems}</div>
+                  <div className="text-sm text-gray-500">Perfect</div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5 text-orange-600" />
+                <div>
+                  <div className="text-2xl font-bold">{damagedItems}</div>
+                  <div className="text-sm text-gray-500">Damaged</div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <div>
+                  <div className="text-2xl font-bold">{missingItems}</div>
+                  <div className="text-sm text-gray-500">Missing</div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Package className="w-5 h-5 text-blue-600" />
+                <div>
+                  <div className="text-2xl font-bold">{cleaningItems}</div>
+                  <div className="text-sm text-gray-500">Needs Cleaning</div>
+                </div>
+              </div>
+            </div>
+            
+            {totalPenalty > 0 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="text-sm text-yellow-800">
+                  <strong>Note:</strong> A final invoice will be automatically generated with penalty charges for damaged/missing items. 
+                  GST (18%) will be applied to all penalty amounts as per Indian tax regulations.
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <Label className="text-sm">Shipped Qty</Label>
-                          <div className="p-2 bg-gray-50 rounded text-sm font-medium">
-                            {returnItem.quantityShipped}
+        {/* Inventory Return Processing */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Inventory Return Processing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-4">
+                  {returnItems.map((returnItem, index) => (
+                    <div key={returnItem.itemId} className="border rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                        <div className="md:col-span-2">
+                          <div className="font-medium">{returnItem.itemName}</div>
+                          <div className="text-sm text-gray-500">
+                            Shipped: {returnItem.quantityShipped} items
                           </div>
                         </div>
-
+                        
                         <div>
-                          <Label className="text-sm">Returned Qty</Label>
-                          <FormField
-                            control={form.control}
-                            name={`returns.${index}.quantityReturned`}
-                            render={({ field }) => (
-                              <Input
-                                type="number"
-                                min="0"
-                                max={returnItem.quantityShipped}
-                                {...field}
-                                onChange={(e) => {
-                                  field.onChange(parseInt(e.target.value) || 0);
-                                }}
-                              />
-                            )}
+                          <label className="text-sm font-medium">Returned</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max={returnItem.quantityShipped}
+                            value={returnItem.quantityReturned}
+                            onChange={(e) => updateReturnItem(index, { 
+                              quantityReturned: parseInt(e.target.value) || 0 
+                            })}
+                            className="mt-1"
                           />
                         </div>
-
+                        
                         <div>
-                          <Label className="text-sm">Condition</Label>
-                          <FormField
-                            control={form.control}
-                            name={`returns.${index}.conditionStatus`}
-                            render={({ field }) => (
-                              <Select onValueChange={(value) => {
-                                field.onChange(value);
-                                calculatePenaltyAmount(index, value);
-                              }}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="perfect">
-                                    <div className="flex items-center">
-                                      <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                                      Perfect
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="damaged">
-                                    <div className="flex items-center">
-                                      <AlertTriangle className="h-4 w-4 text-orange-500 mr-2" />
-                                      Damaged
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="missing">
-                                    <div className="flex items-center">
-                                      <XCircle className="h-4 w-4 text-red-500 mr-2" />
-                                      Missing
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="needs_cleaning">
-                                    <div className="flex items-center">
-                                      <Package2 className="h-4 w-4 text-blue-500 mr-2" />
-                                      Needs Cleaning
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
+                          <label className="text-sm font-medium">Condition</label>
+                          <select
+                            value={returnItem.conditionStatus}
+                            onChange={(e) => updateReturnItem(index, { 
+                              conditionStatus: e.target.value as any 
+                            })}
+                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          >
+                            <option value="perfect">Perfect</option>
+                            <option value="damaged">Damaged</option>
+                            <option value="missing">Missing</option>
+                            <option value="needs_cleaning">Needs Cleaning</option>
+                          </select>
                         </div>
-
+                        
                         <div>
-                          <Label className="text-sm">Penalty Amount (₹)</Label>
-                          <FormField
-                            control={form.control}
-                            name={`returns.${index}.penaltyAmount`}
-                            render={({ field }) => (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                {...field}
-                                className={returnItem.conditionStatus !== 'perfect' ? 'border-red-200 bg-red-50' : ''}
-                              />
-                            )}
-                          />
+                          <label className="text-sm font-medium">Penalty</label>
+                          <div className="mt-1 text-sm font-medium text-red-600">
+                            ₹{returnItem.penaltyAmount.toFixed(2)}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-center">
+                          <Badge className={`${getStatusColor(returnItem.conditionStatus)} border`}>
+                            {getStatusIcon(returnItem.conditionStatus)}
+                            <span className="ml-1 capitalize">{returnItem.conditionStatus.replace('_', ' ')}</span>
+                          </Badge>
                         </div>
                       </div>
-
-                      {(returnItem.conditionStatus === 'damaged' || returnItem.conditionStatus === 'missing') && (
-                        <div>
-                          <Label className="text-sm">Damage/Loss Notes</Label>
-                          <FormField
-                            control={form.control}
-                            name={`returns.${index}.damageNotes`}
-                            render={({ field }) => (
-                              <Textarea
-                                placeholder="Describe the damage or provide details about missing items..."
-                                {...field}
-                              />
-                            )}
+                      
+                      {(returnItem.conditionStatus === 'damaged' || returnItem.conditionStatus === 'needs_cleaning') && (
+                        <div className="mt-3">
+                          <label className="text-sm font-medium">Notes</label>
+                          <Input
+                            placeholder="Describe the damage or cleaning requirements..."
+                            value={returnItem.damageNotes}
+                            onChange={(e) => updateReturnItem(index, { damageNotes: e.target.value })}
+                            className="mt-1"
                           />
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
 
-                      <div>
-                        <Label className="text-sm">Checked By (Inspector)</Label>
-                        <FormField
-                          control={form.control}
-                          name={`returns.${index}.checkedBy`}
-                          render={({ field }) => (
-                            <Input
-                              placeholder="Enter inspector name"
-                              {...field}
-                            />
-                          )}
-                        />
+                {totalPenalty > 0 && (
+                  <div className="mt-6 p-4 bg-gray-50 border rounded-lg">
+                    <div className="text-lg font-semibold mb-2">Penalty Summary</div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Subtotal Penalty:</span>
+                        <span>₹{totalPenalty.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>GST (18%):</span>
+                        <span>₹{(totalPenalty * 0.18).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold border-t pt-1">
+                        <span>Total Penalty Amount:</span>
+                        <span>₹{(totalPenalty * 1.18).toFixed(2)}</span>
                       </div>
                     </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            {/* Summary Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Return Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {['perfect', 'damaged', 'missing', 'needs_cleaning'].map(status => {
-                    const count = form.watch("returns").filter(r => r.conditionStatus === status).length;
-                    const totalPenalty = form.watch("returns")
-                      .filter(r => r.conditionStatus === status)
-                      .reduce((sum, r) => sum + parseFloat(r.penaltyAmount || '0'), 0);
-                    
-                    return (
-                      <div key={status} className="text-center p-3 rounded-lg border">
-                        {getConditionIcon(status)}
-                        <div className="mt-2 font-semibold">{count} Items</div>
-                        <div className="text-sm text-gray-600 capitalize">{status.replace('_', ' ')}</div>
-                        {(status === 'damaged' || status === 'missing') && totalPenalty > 0 && (
-                          <div className="text-sm font-medium text-red-600 mt-1">
-                            Penalty: ₹{totalPenalty.toFixed(2)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="text-sm text-yellow-800">
-                    <strong>Note:</strong> A final invoice will be automatically generated with penalty charges for damaged/missing items. 
-                    GST (18%) will be applied to all penalty amounts as per Indian tax regulations.
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                )}
 
-            <div className="flex justify-end space-x-3">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={processReturns.isPending}>
-                {processReturns.isPending ? "Processing..." : "Process Returns & Generate Final Invoice"}
-              </Button>
-            </div>
-          </form>
-        </Form>
+                <div className="flex justify-end space-x-3 pt-4 border-t">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={processReturnsMutation.isPending}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {processReturnsMutation.isPending ? "Processing..." : "Process Returns & Generate Final Invoice"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       </DialogContent>
     </Dialog>
   );
