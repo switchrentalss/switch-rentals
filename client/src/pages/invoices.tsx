@@ -254,7 +254,7 @@ export default function Invoices() {
                 variant="outline" 
                 size="sm" 
                 className="flex-1"
-                onClick={() => generatePDF(invoice, invoice.invoiceType as any)}
+                onClick={() => generateInvoicePDF(invoice)}
               >
                 <Download className="h-3 w-3 mr-1" />
                 PDF

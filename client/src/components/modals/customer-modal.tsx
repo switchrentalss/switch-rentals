@@ -37,6 +37,7 @@ export function CustomerModal({ open, onOpenChange }: CustomerModalProps) {
       phone: "",
       address: "",
       company: "",
+      gstNumber: "",
       notes: "",
     },
   });

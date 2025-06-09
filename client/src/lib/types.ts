@@ -22,6 +22,7 @@ export interface CustomerFormData {
   phone: string;
   address: string;
   company?: string;
+  gstNumber?: string;
   notes?: string;
 }
 

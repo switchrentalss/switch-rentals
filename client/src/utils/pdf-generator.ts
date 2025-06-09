@@ -45,7 +45,7 @@ export function generateInvoicePDF(invoiceData: InvoiceData) {
   const lightGray: [number, number, number] = [189, 195, 199];
   
   // Header - Company Information
-  doc.setFillColor(...primaryColor);
+  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   doc.rect(0, 0, 210, 50, 'F');
   
   // Company Logo/Name
@@ -60,7 +60,7 @@ export function generateInvoicePDF(invoiceData: InvoiceData) {
   doc.text('GSTIN: 27AFHFS2025K1ZV', 20, 42);
   
   // Invoice Title
-  doc.setTextColor(...darkGray);
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(invoiceData.invoiceType.toUpperCase(), 150, 25);
@@ -126,7 +126,7 @@ export function generateInvoicePDF(invoiceData: InvoiceData) {
       cellPadding: 5,
     },
     headStyles: {
-      fillColor: primaryColor,
+      fillColor: [primaryColor[0], primaryColor[1], primaryColor[2]],
       textColor: [255, 255, 255],
       fontSize: 10,
       fontStyle: 'bold',
@@ -170,7 +170,7 @@ export function generateInvoicePDF(invoiceData: InvoiceData) {
   totalsY += 15;
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.setFillColor(...lightGray);
+  doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
   doc.rect(130, totalsY - 8, 60, 15, 'F');
   doc.text('Total Amount:', 140, totalsY);
   doc.text(`₹${invoiceData.totalAmount}`, 170, totalsY);
@@ -193,7 +193,7 @@ export function generateInvoicePDF(invoiceData: InvoiceData) {
   const pageHeight = doc.internal.pageSize.height;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...lightGray);
+  doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
   doc.text('Thank you for choosing Switch Rental Services LLP', 20, pageHeight - 20);
   doc.text('Contact: +91-XXXXXXXXXX | Email: info@switchrental.com', 20, pageHeight - 10);
   

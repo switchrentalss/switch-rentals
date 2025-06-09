@@ -80,10 +80,19 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
 
   const createInvoice = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/invoices", {
+      const response = await fetch("/api/invoices", {
         method: "POST",
-        body: JSON.stringify(data)
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       });
+      
+      if (!response.ok) {
+        throw new Error("Failed to create quotation");
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
