@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { OrderModal } from "@/components/modals/order-modal";
-import { ClipboardList, Search, Filter, Eye } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ClipboardList, Search, Filter, Eye, MoreHorizontal, Edit, Package, FileText, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { OrderWithCustomer } from "@shared/schema";
 
@@ -149,9 +157,40 @@ export default function Orders() {
                           {format(new Date(order.endDate), "MMM dd, yyyy")}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => console.log('View order:', order.id)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Order
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => console.log('Edit order:', order.id)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Order
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => console.log('Track items:', order.id)}>
+                                <Package className="w-4 h-4 mr-2" />
+                                Track Items
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => console.log('Generate invoice:', order.id)}>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Generate Invoice
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => console.log('Cancel order:', order.id)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Cancel Order
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     ))}

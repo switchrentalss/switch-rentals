@@ -5,7 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CustomerModal } from "@/components/modals/customer-modal";
-import { Users, Search, Filter, Plus, Mail, Phone, Edit } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Users, Search, Filter, Plus, Mail, Phone, Edit, MoreHorizontal, Trash2, Eye, FileText } from "lucide-react";
 import type { Customer } from "@shared/schema";
 
 export default function Customers() {
@@ -115,16 +123,36 @@ export default function Customers() {
                         )}
                       </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => {
-                        // TODO: Implement edit customer functionality
-                        console.log('Edit customer:', customer.id);
-                      }}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => console.log('View customer:', customer.id)}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => console.log('Edit customer:', customer.id)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit Customer
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => console.log('View orders:', customer.id)}>
+                          <FileText className="w-4 h-4 mr-2" />
+                          View Orders
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => console.log('Delete customer:', customer.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Customer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   
                   <div className="space-y-2">

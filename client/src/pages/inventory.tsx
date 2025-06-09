@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InventoryModal } from "@/components/modals/inventory-modal";
-import { Package, Search, Filter, Plus, Edit } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Package, Search, Filter, Plus, Edit, MoreHorizontal, Trash2, Eye, Settings } from "lucide-react";
 import type { InventoryItem } from "@shared/schema";
 
 function getStockStatus(item: InventoryItem): { status: string; variant: "default" | "secondary" | "destructive" } {
@@ -173,16 +181,36 @@ export default function Inventory() {
                             </Badge>
                           </td>
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                // TODO: Implement edit functionality
-                                console.log('Edit item:', item.id);
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => console.log('View item:', item.id)}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => console.log('Edit item:', item.id)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit Item
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => console.log('Adjust stock:', item.id)}>
+                                  <Settings className="w-4 h-4 mr-2" />
+                                  Adjust Stock
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => console.log('Delete item:', item.id)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete Item
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );
