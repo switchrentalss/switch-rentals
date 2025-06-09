@@ -53,6 +53,7 @@ interface Invoice {
     email: string;
     company?: string;
   };
+  items?: any[];
 }
 
 interface InventoryReturn {
@@ -99,11 +100,11 @@ function InvoiceTypeIcon({ type }: { type: string }) {
     case 'quotation':
       return <FileText className="h-4 w-4 text-blue-500" />;
     case 'proforma':
-      return <Eye className="h-4 w-4 text-purple-500" />;
+      return <Send className="h-4 w-4 text-purple-500" />;
     case 'gst_invoice':
       return <IndianRupee className="h-4 w-4 text-green-500" />;
     case 'final_invoice':
-      return <CheckCircle className="h-4 w-4 text-emerald-500" />;
+      return <CheckCircle className="h-4 w-4 text-orange-500" />;
     default:
       return <FileText className="h-4 w-4" />;
   }
@@ -112,7 +113,7 @@ function InvoiceTypeIcon({ type }: { type: string }) {
 function ReturnStatusBadge({ status }: { status: string }) {
   const variants = {
     'perfect': 'default',
-    'damaged': 'destructive', 
+    'damaged': 'destructive',
     'missing': 'destructive',
     'needs_cleaning': 'secondary'
   } as const;
@@ -211,8 +212,6 @@ export default function Invoices() {
     }
   });
 
-
-
   function InvoiceCard({ invoice }: { invoice: Invoice }) {
     return (
       <Card className="hover:shadow-md transition-shadow">
@@ -225,34 +224,28 @@ export default function Invoices() {
             <InvoiceStatusBadge status={invoice.status} />
           </div>
           <CardDescription>
-            {invoice.customer?.name} • {invoice.customer?.company}
+            {invoice.customer?.name} - {invoice.customer?.company}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Event Date:</span>
-              <span className="font-medium">{new Date(invoice.eventDate).toLocaleDateString()}</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Event Date:</span>
+              <span>{new Date(invoice.eventDate).toLocaleDateString()}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total Amount:</span>
-              <span className="font-semibold text-green-600">₹{parseFloat(invoice.totalAmount).toLocaleString()}</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Amount:</span>
+              <span className="font-semibold">₹{invoice.totalAmount}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">GST ({invoice.gstRate}%):</span>
-              <span className="text-sm">₹{parseFloat(invoice.gstAmount).toLocaleString()}</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">GST ({invoice.gstRate}%):</span>
+              <span>₹{invoice.gstAmount}</span>
             </div>
-            {invoice.dueDate && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Due Date:</span>
-                <span className="text-sm">{new Date(invoice.dueDate).toLocaleDateString()}</span>
-              </div>
-            )}
-            <div className="flex space-x-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1">
-                <Eye className="h-3 w-3 mr-1" />
-                View
-              </Button>
+            <div className="text-xs text-gray-500 mt-2">
+              {invoice.eventDetails}
+            </div>
+            
+            <div className="flex space-x-2 pt-3">
               <Button variant="outline" size="sm" className="flex-1">
                 <Download className="h-3 w-3 mr-1" />
                 PDF
@@ -313,37 +306,32 @@ export default function Invoices() {
             <ReturnStatusBadge status={returnItem.conditionStatus} />
           </div>
           <CardDescription>
-            Order #{returnItem.orderId} • {returnItem.item?.category}
+            Return ID: {returnItem.id} | Order: {returnItem.orderId}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-sm text-gray-600">Shipped:</span>
-                <div className="font-medium">{returnItem.quantityShipped} units</div>
-              </div>
-              <div>
-                <span className="text-sm text-gray-600">Returned:</span>
-                <div className="font-medium">{returnItem.quantityReturned} units</div>
-              </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Shipped:</span>
+              <span>{returnItem.quantityShipped}</span>
             </div>
-            {returnItem.penaltyAmount !== '0.00' && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Penalty:</span>
-                <span className="font-semibold text-red-600">₹{parseFloat(returnItem.penaltyAmount).toLocaleString()}</span>
-              </div>
-            )}
+            <div className="flex justify-between text-sm">
+              <span>Returned:</span>
+              <span>{returnItem.quantityReturned}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Penalty:</span>
+              <span className="font-semibold text-red-600">₹{returnItem.penaltyAmount}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Checked By:</span>
+              <span>{returnItem.checkedBy}</span>
+            </div>
             {returnItem.damageNotes && (
-              <div>
-                <span className="text-sm text-gray-600">Notes:</span>
-                <p className="text-sm mt-1 p-2 bg-gray-50 rounded">{returnItem.damageNotes}</p>
+              <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                {returnItem.damageNotes}
               </div>
             )}
-            <div className="flex justify-between items-center text-xs text-gray-500">
-              <span>Checked by: {returnItem.checkedBy || 'Pending'}</span>
-              <span>{new Date(returnItem.returnDate).toLocaleDateString()}</span>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -351,183 +339,189 @@ export default function Invoices() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <Header 
-        title="Invoice Management" 
-        subtitle="GST invoices, quotations, and return tracking"
-      />
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Quotations</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{quotations.filter((q: Invoice) => q.status === 'draft').length}</div>
-            <p className="text-xs text-muted-foreground">Awaiting customer approval</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unpaid Invoices</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{gstInvoices.filter((i: Invoice) => i.status === 'sent').length}</div>
-            <p className="text-xs text-muted-foreground">Awaiting payment</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Return Items</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inventoryReturns.filter((r: InventoryReturn) => r.conditionStatus !== 'perfect').length}</div>
-            <p className="text-xs text-muted-foreground">Need attention</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month Revenue</CardTitle>
-            <IndianRupee className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹2.4L</div>
-            <p className="text-xs text-muted-foreground">From completed orders</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="quotations">Quotations</TabsTrigger>
-            <TabsTrigger value="proforma">Proforma</TabsTrigger>
-            <TabsTrigger value="gst-invoices">GST Invoices</TabsTrigger>
-            <TabsTrigger value="final-invoices">Final Invoices</TabsTrigger>
-            <TabsTrigger value="returns">Return Tracking</TabsTrigger>
-          </TabsList>
-
-          <div className="flex space-x-2">
-            <Button onClick={() => setCreateInvoiceOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Quotation
-            </Button>
-            
-            <QuotationModal 
-              open={createInvoiceOpen} 
-              onOpenChange={setCreateInvoiceOpen}
-            />
-
-            <Dialog open={returnTrackingOpen} onOpenChange={setReturnTrackingOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Truck className="h-4 w-4 mr-2" />
-                  Process Returns
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Process Inventory Returns</DialogTitle>
-                  <DialogDescription>
-                    Check returned items and update their condition
-                  </DialogDescription>
-                </DialogHeader>
-                {/* Return processing form would go here */}
-                <div className="p-4 text-center text-gray-500">
-                  Return processing form will be implemented here
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            GST Invoices, Quotations, and Return Tracking
+          </h1>
+          <p className="text-gray-600">
+            Manage quotations, proforma invoices, GST invoices, final settlements, and inventory returns
+          </p>
         </div>
 
-        <TabsContent value="quotations" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quotationsLoading ? (
-              <div className="col-span-full text-center py-8">Loading quotations...</div>
-            ) : quotations.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No quotations found. Create your first quotation to get started.
-              </div>
-            ) : (
-              quotations.map((quote: Invoice) => (
-                <InvoiceCard key={quote.id} invoice={quote} />
-              ))
-            )}
-          </div>
-        </TabsContent>
+        {/* Key Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Quotations</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{quotations.filter((q: Invoice) => q.status === 'draft').length}</div>
+              <p className="text-xs text-muted-foreground">Awaiting customer approval</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Unpaid Invoices</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{gstInvoices.filter((i: Invoice) => i.status === 'sent').length}</div>
+              <p className="text-xs text-muted-foreground">Awaiting payment</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Return Items</CardTitle>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{inventoryReturns.filter((r: InventoryReturn) => r.conditionStatus !== 'perfect').length}</div>
+              <p className="text-xs text-muted-foreground">Need attention</p>
+            </CardContent>
+          </Card>
+        </div>
 
-        <TabsContent value="proforma" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {proformaLoading ? (
-              <div className="col-span-full text-center py-8">Loading proforma invoices...</div>
-            ) : proformaInvoices.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No proforma invoices found. Convert quotations to create proforma invoices.
-              </div>
-            ) : (
-              proformaInvoices.map((invoice: Invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </div>
-        </TabsContent>
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+          <div className="flex items-center justify-between">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="quotations">Quotations</TabsTrigger>
+              <TabsTrigger value="proforma-invoices">Proforma Invoices</TabsTrigger>
+              <TabsTrigger value="gst-invoices">GST Invoices</TabsTrigger>
+              <TabsTrigger value="final-invoices">Final Invoices</TabsTrigger>
+              <TabsTrigger value="returns">Return Tracking</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="gst-invoices" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {gstLoading ? (
-              <div className="col-span-full text-center py-8">Loading GST invoices...</div>
-            ) : gstInvoices.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No GST invoices found. Convert approved quotations to GST invoices.
-              </div>
-            ) : (
-              gstInvoices.map((invoice: Invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </div>
-        </TabsContent>
+            <div className="flex space-x-2">
+              <Button onClick={() => setCreateInvoiceOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Quotation
+              </Button>
+              
+              <QuotationModal 
+                open={createInvoiceOpen} 
+                onOpenChange={setCreateInvoiceOpen}
+              />
 
-        <TabsContent value="final-invoices" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {finalLoading ? (
-              <div className="col-span-full text-center py-8">Loading final invoices...</div>
-            ) : finalInvoices.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No final invoices found. Process returns to generate final invoices.
-              </div>
-            ) : (
-              finalInvoices.map((invoice: Invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </div>
-        </TabsContent>
+              <ReturnChallanModal
+                open={returnChallanOpen}
+                onOpenChange={setReturnChallanOpen}
+                gstInvoice={selectedGstInvoice}
+              />
 
-        <TabsContent value="returns" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {returnsLoading ? (
-              <div className="col-span-full text-center py-8">Loading return records...</div>
-            ) : inventoryReturns.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No return records found. Items will appear here when orders are completed.
-              </div>
-            ) : (
-              inventoryReturns.map((returnItem: InventoryReturn) => (
-                <ReturnTrackingCard key={returnItem.id} returnItem={returnItem} />
-              ))
-            )}
+              <Dialog open={returnTrackingOpen} onOpenChange={setReturnTrackingOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Truck className="h-4 w-4 mr-2" />
+                    Return Tracking
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create Return Tracking</DialogTitle>
+                    <DialogDescription>
+                      Create a new return tracking entry for inventory items
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="p-4 text-center text-gray-500">
+                    Return tracking form will be implemented here
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
-        </TabsContent>
-      </Tabs>
+
+          <TabsContent value="quotations" className="mt-6">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Quotations</h2>
+              {quotationsLoading ? (
+                <div className="text-center py-8">Loading quotations...</div>
+              ) : quotations.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No quotations found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {quotations.map((quote: Invoice) => (
+                    <InvoiceCard key={quote.id} invoice={quote} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="proforma-invoices" className="mt-6">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Proforma Invoices</h2>
+              {proformaLoading ? (
+                <div className="text-center py-8">Loading proforma invoices...</div>
+              ) : proformaInvoices.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No proforma invoices found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {proformaInvoices.map((invoice: Invoice) => (
+                    <InvoiceCard key={invoice.id} invoice={invoice} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="gst-invoices" className="mt-6">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">GST Invoices</h2>
+              {gstLoading ? (
+                <div className="text-center py-8">Loading GST invoices...</div>
+              ) : gstInvoices.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No GST invoices found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {gstInvoices.map((invoice: Invoice) => (
+                    <InvoiceCard key={invoice.id} invoice={invoice} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="final-invoices" className="mt-6">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Final Invoices</h2>
+              {finalLoading ? (
+                <div className="text-center py-8">Loading final invoices...</div>
+              ) : finalInvoices.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No final invoices found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {finalInvoices.map((invoice: Invoice) => (
+                    <InvoiceCard key={invoice.id} invoice={invoice} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="returns" className="mt-6">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Inventory Returns & Condition Tracking</h2>
+              {returnsLoading ? (
+                <div className="text-center py-8">Loading inventory returns...</div>
+              ) : inventoryReturns.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No inventory returns found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {inventoryReturns.map((returnItem: InventoryReturn) => (
+                    <ReturnTrackingCard key={returnItem.id} returnItem={returnItem} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
     </div>
   );
 }
