@@ -109,11 +109,12 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   const sampleType = form.watch("sampleType");
 
   const calculateItemTotal = (quantity: number, ratePerDay: string, startDate: string, endDate: string) => {
-    if (!ratePerDay || !startDate || !endDate) return 0;
+    if (!ratePerDay || !startDate || !endDate || !quantity) return 0;
     
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const timeDiff = end.getTime() - start.getTime();
+    const days = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
     
     return quantity * parseFloat(ratePerDay) * days;
   };
@@ -166,7 +167,7 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
         itemId: item.itemId,
         quantity: item.quantity,
         ratePerDay: item.ratePerDay,
-        days: Math.max(1, Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1),
+        days: Math.max(1, Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24))),
         lineTotal: item.totalAmount
       }))
     };

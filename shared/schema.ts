@@ -9,6 +9,7 @@ export const customers = pgTable("customers", {
   phone: varchar("phone", { length: 20 }).notNull(),
   address: text("address").notNull(),
   company: varchar("company", { length: 255 }),
+  gstNumber: varchar("gst_number", { length: 15 }),
   notes: text("notes"),
 });
 
