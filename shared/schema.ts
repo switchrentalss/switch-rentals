@@ -151,6 +151,9 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 
 export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit({
   id: true,
+  outStock: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({

@@ -130,7 +130,16 @@ export class DatabaseStorage implements IStorage {
   async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
     const [newItem] = await db.insert(inventoryItems).values({
       ...item,
-      description: item.description || null
+      description: item.description || null,
+      subcategory: item.subcategory || null,
+      outStock: item.totalStock - item.availableStock,
+      replacementCost: item.replacementCost || null,
+      status: item.status || "in_stock",
+      location: item.location || null,
+      supplier: item.supplier || null,
+      purchaseDate: item.purchaseDate || null,
+      warrantyExpiry: item.warrantyExpiry || null,
+      notes: item.notes || null
     }).returning();
     return newItem;
   }
@@ -281,11 +290,23 @@ export class DatabaseStorage implements IStorage {
           name: inventoryItems.name,
           description: inventoryItems.description,
           category: inventoryItems.category,
+          subcategory: inventoryItems.subcategory,
           totalStock: inventoryItems.totalStock,
           availableStock: inventoryItems.availableStock,
+          outStock: inventoryItems.outStock,
           ratePerDay: inventoryItems.ratePerDay,
           maintenanceStatus: inventoryItems.maintenanceStatus,
           replacementCost: inventoryItems.replacementCost,
+          status: inventoryItems.status,
+          location: inventoryItems.location,
+          supplier: inventoryItems.supplier,
+          purchaseDate: inventoryItems.purchaseDate,
+          warrantyExpiry: inventoryItems.warrantyExpiry,
+          notes: inventoryItems.notes,
+          sku: inventoryItems.sku,
+          itemCode: inventoryItems.itemCode,
+          createdAt: inventoryItems.createdAt,
+          updatedAt: inventoryItems.updatedAt,
         }
       })
       .from(orderItems)
