@@ -84,10 +84,10 @@ export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
   orderId: integer("order_id").references(() => orders.id),
-  quoteId: integer("quote_id").references(() => quotes.id),
+  quoteId: integer("quote_id"), // Remove foreign key constraint for now
   invoiceNumber: varchar("invoice_number", { length: 50 }).unique().notNull(),
   invoiceType: varchar("invoice_type", { length: 20 }).notNull(), // quotation, proforma, gst_invoice, final_invoice
-  eventDate: date("event_date").notNull(),
+  dispatchDate: date("dispatch_date").notNull(), // Changed from eventDate
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
   eventDetails: text("event_details"),
@@ -95,6 +95,8 @@ export const invoices = pgTable("invoices", {
   gstRate: decimal("gst_rate", { precision: 5, scale: 2 }).default("18.00"),
   gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }).default("0.00"),
+  sampleType: varchar("sample_type", { length: 20 }).default("none"), // none, free_1day, paid
   status: varchar("status", { length: 20 }).default("draft"), // draft, sent, paid, overdue
   dueDate: date("due_date"),
   terms: text("terms"),
