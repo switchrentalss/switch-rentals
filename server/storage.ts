@@ -628,7 +628,7 @@ export class DatabaseStorage implements IStorage {
           damageNotes: returnItem.damageNotes,
           penaltyAmount: returnItem.penaltyAmount || '0',
           checkedBy: returnItem.checkedBy || 'System',
-          returnDate: new Date().toISOString().split('T')[0]
+          // returnDate field removed as it doesn't exist in schema
         });
       }
 
@@ -636,9 +636,8 @@ export class DatabaseStorage implements IStorage {
       const finalInvoiceData: InsertInvoice = {
         customerId: gstInvoice.customerId,
         quoteId: gstInvoice.quoteId,
-        invoiceNumber: this.generateInvoiceNumber('final_invoice'),
         invoiceType: 'final_invoice',
-        eventDate: gstInvoice.eventDate,
+        dispatchDate: gstInvoice.dispatchDate,
         startDate: gstInvoice.startDate,
         endDate: gstInvoice.endDate,
         eventDetails: `${gstInvoice.eventDetails} - Final Settlement with Return Processing`,
@@ -656,7 +655,8 @@ export class DatabaseStorage implements IStorage {
         quantity: item.quantity,
         ratePerDay: item.ratePerDay,
         days: item.days,
-        lineTotal: item.lineTotal
+        lineTotal: item.lineTotal,
+        invoiceId: 0 // Will be set by createInvoice
       }));
 
       const finalInvoice = await this.createInvoice(finalInvoiceData, finalInvoiceItems);
@@ -673,7 +673,7 @@ export class DatabaseStorage implements IStorage {
 
   async getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]> {
     try {
-      let query = db
+      const baseQuery = db
         .select({
           inventoryReturn: inventoryReturns,
           item: inventoryItems,
@@ -681,9 +681,9 @@ export class DatabaseStorage implements IStorage {
         .from(inventoryReturns)
         .leftJoin(inventoryItems, eq(inventoryReturns.itemId, inventoryItems.id));
 
-      if (orderId) {
-        query = query.where(eq(inventoryReturns.orderId, orderId));
-      }
+      const query = orderId 
+        ? baseQuery.where(eq(inventoryReturns.orderId, orderId))
+        : baseQuery;
 
       const results = await query.execute();
       

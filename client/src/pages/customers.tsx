@@ -115,7 +115,14 @@ export default function Customers() {
                         )}
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        // TODO: Implement edit customer functionality
+                        console.log('Edit customer:', customer.id);
+                      }}
+                    >
                       <Edit className="w-4 h-4" />
                     </Button>
                   </div>
