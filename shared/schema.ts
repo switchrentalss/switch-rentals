@@ -15,14 +15,26 @@ export const customers = pgTable("customers", {
 
 export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
+  sku: varchar("sku", { length: 50 }).unique(),
+  itemCode: varchar("item_code", { length: 50 }),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 100 }).notNull(),
+  subcategory: varchar("subcategory", { length: 100 }),
   totalStock: integer("total_stock").notNull(),
   availableStock: integer("available_stock").notNull(),
+  outStock: integer("out_stock").notNull().default(0),
   ratePerDay: decimal("rate_per_day", { precision: 10, scale: 2 }).notNull(),
   maintenanceStatus: varchar("maintenance_status", { length: 50 }).notNull().default("available"),
   replacementCost: decimal("replacement_cost", { precision: 10, scale: 2 }),
+  status: varchar("status", { length: 30 }).notNull().default("in_stock"),
+  location: varchar("location", { length: 100 }),
+  supplier: varchar("supplier", { length: 255 }),
+  purchaseDate: date("purchase_date"),
+  warrantyExpiry: date("warranty_expiry"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const orders = pgTable("orders", {

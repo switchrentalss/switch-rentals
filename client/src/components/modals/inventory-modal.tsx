@@ -12,25 +12,68 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const inventorySchema = z.object({
+  sku: z.string().optional(),
+  itemCode: z.string().optional(),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
+  subcategory: z.string().optional(),
   totalStock: z.number().min(1, "Total stock must be at least 1"),
   availableStock: z.number().min(0, "Available stock cannot be negative"),
+  outStock: z.number().min(0, "Out stock cannot be negative").default(0),
   ratePerDay: z.string().min(1, "Rate per day is required"),
+  replacementCost: z.string().optional(),
+  status: z.string().default("in_stock"),
+  location: z.string().optional(),
+  supplier: z.string().optional(),
+  purchaseDate: z.string().optional(),
+  warrantyExpiry: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type InventoryFormData = z.infer<typeof inventorySchema>;
 
 const categories = [
+  "Mono Portions Artevo",
+  "Mesa Portions Artevo", 
   "Plates",
-  "Glassware", 
+  "Glassware",
   "Cutlery",
   "Linens",
   "Serving",
   "Decor",
   "Furniture",
   "Other"
+];
+
+const subcategories = {
+  "Mono Portions Artevo": ["Small Rectangular Plates (Half)", "Round Plates", "Square Plates"],
+  "Mesa Portions Artevo": ["Rectangular Platter", "Large Serving Plates", "Buffet Plates"],
+  "Plates": ["Dinner Plates", "Side Plates", "Dessert Plates"],
+  "Glassware": ["Wine Glasses", "Water Glasses", "Champagne Flutes"],
+  "Cutlery": ["Dinner Sets", "Dessert Sets", "Serving Sets"],
+  "Linens": ["Tablecloths", "Napkins", "Table Runners"],
+  "Serving": ["Serving Trays", "Bowls", "Platters"],
+  "Decor": ["Centerpieces", "Candles", "Decorative Items"],
+  "Furniture": ["Tables", "Chairs", "Buffet Stands"],
+  "Other": ["Miscellaneous Items"]
+};
+
+const statusOptions = [
+  { value: "in_stock", label: "In Stock" },
+  { value: "low_stock", label: "Low Stock" },
+  { value: "out_of_stock", label: "Out of Stock" },
+  { value: "on_order", label: "On Order" },
+  { value: "discontinued", label: "Discontinued" }
+];
+
+const maintenanceStatusOptions = [
+  { value: "available", label: "Available" },
+  { value: "out_for_rent", label: "Out for Rent" },
+  { value: "needs_cleaning", label: "Needs Cleaning" },
+  { value: "in_repair", label: "In Repair" },
+  { value: "damaged", label: "Damaged" },
+  { value: "retired", label: "Retired" }
 ];
 
 interface InventoryModalProps {
