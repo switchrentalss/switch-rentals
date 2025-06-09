@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { OrderModal } from "@/components/modals/order-modal";
 import { useState } from "react";
+import { Link } from "wouter";
 import { 
   ClipboardList, 
   Package, 
@@ -154,9 +155,11 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Recent Orders</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => window.location.href = "/orders"}>
-                  View all
-                </Button>
+                <Link href="/orders">
+                  <Button variant="ghost" size="sm">
+                    View all
+                  </Button>
+                </Link>
               </div>
             </CardHeader>
             <CardContent>

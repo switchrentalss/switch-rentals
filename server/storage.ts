@@ -166,6 +166,7 @@ export class DatabaseStorage implements IStorage {
           phone: customers.phone,
           address: customers.address,
           company: customers.company,
+          gstNumber: customers.gstNumber,
           notes: customers.notes,
         }
       })
@@ -205,6 +206,7 @@ export class DatabaseStorage implements IStorage {
           phone: customers.phone,
           address: customers.address,
           company: customers.company,
+          gstNumber: customers.gstNumber,
           notes: customers.notes,
         }
       })
