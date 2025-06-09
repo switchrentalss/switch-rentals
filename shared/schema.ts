@@ -85,7 +85,7 @@ export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
   orderId: integer("order_id").references(() => orders.id),
-  quoteId: integer("quote_id"), // Remove foreign key constraint for now
+  quoteId: integer("quote_id"), // Reference to parent quotation
   invoiceNumber: varchar("invoice_number", { length: 50 }).unique().notNull(),
   invoiceType: varchar("invoice_type", { length: 20 }).notNull(), // quotation, proforma, gst_invoice, final_invoice
   dispatchDate: date("dispatch_date").notNull(), // Changed from eventDate

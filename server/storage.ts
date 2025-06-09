@@ -537,7 +537,7 @@ export class DatabaseStorage implements IStorage {
       const invoiceData: InsertInvoice = {
         customerId: quote.customerId,
         quoteId: quoteId,
-        invoiceNumber: this.generateInvoiceNumber(invoiceType),
+
         invoiceType: invoiceType as any,
         dispatchDate: quote.dispatchDate,
         startDate: quote.startDate,
