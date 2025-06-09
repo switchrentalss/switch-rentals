@@ -331,28 +331,19 @@ export class DatabaseStorage implements IStorage {
       .from(orders)
       .where(sql`${orders.endDate} < current_date AND ${orders.status} = 'active'`);
 
-    // Get pending quotes count (if quotes table exists)
-    let pendingQuotes = 0;
-    try {
-      const [pendingQuotesResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(quotes)
-        .where(eq(quotes.status, 'pending'));
-      pendingQuotes = pendingQuotesResult.count || 0;
-    } catch {
-      // Table might not exist yet
-    }
+    // Get pending quotes count from invoices table
+    const [pendingQuotesResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(invoices)
+      .where(eq(invoices.invoiceType, 'quotation'));
+    const pendingQuotes = pendingQuotesResult.count || 0;
 
-    // Get damage reports count (if table exists)
-    let damageReportsCount = 0;
-    try {
-      const [damageReportsResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(damageReports);
-      damageReportsCount = damageReportsResult.count || 0;
-    } catch {
-      // Table might not exist yet
-    }
+    // Get damage reports count from inventory returns
+    const [damageReportsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(inventoryReturns)
+      .where(eq(inventoryReturns.conditionStatus, 'damaged'));
+    const damageReportsCount = damageReportsResult.count || 0;
 
     return {
       activeOrders: activeOrdersResult.count || 0,
@@ -379,7 +370,7 @@ export class DatabaseStorage implements IStorage {
   // Invoice Management
   async getInvoices(type?: string): Promise<InvoiceWithCustomer[]> {
     try {
-      let query = db
+      const baseQuery = db
         .select({
           invoice: invoices,
           customer: customers,
@@ -387,9 +378,9 @@ export class DatabaseStorage implements IStorage {
         .from(invoices)
         .leftJoin(customers, eq(invoices.customerId, customers.id));
 
-      if (type) {
-        query = query.where(eq(invoices.invoiceType, type));
-      }
+      const query = type 
+        ? baseQuery.where(eq(invoices.invoiceType, type))
+        : baseQuery;
 
       const results = await query.execute();
       
@@ -402,8 +393,7 @@ export class DatabaseStorage implements IStorage {
             })
             .from(invoiceItems)
             .leftJoin(inventoryItems, eq(invoiceItems.itemId, inventoryItems.id))
-            .where(eq(invoiceItems.invoiceId, invoice.id))
-            .execute();
+            .where(eq(invoiceItems.invoiceId, invoice.id));
 
           return {
             ...invoice,

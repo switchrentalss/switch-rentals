@@ -173,7 +173,14 @@ export default function Inventory() {
                             </Badge>
                           </td>
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                // TODO: Implement edit functionality
+                                console.log('Edit item:', item.id);
+                              }}
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
                           </td>
