@@ -539,7 +539,7 @@ export class DatabaseStorage implements IStorage {
         quoteId: quoteId,
         invoiceNumber: this.generateInvoiceNumber(invoiceType),
         invoiceType: invoiceType as any,
-        eventDate: quote.eventDate,
+        dispatchDate: quote.dispatchDate,
         startDate: quote.startDate,
         endDate: quote.endDate,
         eventDetails: quote.eventDetails,
@@ -547,6 +547,8 @@ export class DatabaseStorage implements IStorage {
         gstRate: quote.gstRate,
         gstAmount: quote.gstAmount,
         totalAmount: quote.totalAmount,
+        depositAmount: quote.depositAmount || "0.00",
+        sampleType: quote.sampleType || "none",
         status: invoiceType === 'quotation' ? 'draft' : 'sent',
         terms: quote.terms,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]

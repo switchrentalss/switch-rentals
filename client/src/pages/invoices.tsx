@@ -35,7 +35,7 @@ interface Invoice {
   quoteId?: number;
   invoiceNumber: string;
   invoiceType: 'quotation' | 'proforma' | 'gst_invoice' | 'final_invoice';
-  eventDate: string;
+  dispatchDate: string;
   startDate: string;
   endDate: string;
   eventDetails: string;
@@ -43,6 +43,8 @@ interface Invoice {
   gstRate: string;
   gstAmount: string;
   totalAmount: string;
+  depositAmount?: string;
+  sampleType?: 'none' | 'free_1day' | 'paid';
   status: 'draft' | 'sent' | 'paid' | 'overdue';
   dueDate?: string;
   terms?: string;
@@ -231,8 +233,8 @@ export default function Invoices() {
         <CardContent>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Event Date:</span>
-              <span>{new Date(invoice.eventDate).toLocaleDateString()}</span>
+              <span className="text-gray-600">Dispatch Date:</span>
+              <span>{new Date(invoice.dispatchDate).toLocaleDateString()}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Amount:</span>
@@ -247,7 +249,12 @@ export default function Invoices() {
             </div>
             
             <div className="flex space-x-2 pt-3">
-              <Button variant="outline" size="sm" className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => generatePDF(invoice, invoice.invoiceType as any)}
+              >
                 <Download className="h-3 w-3 mr-1" />
                 PDF
               </Button>
@@ -341,7 +348,7 @@ export default function Invoices() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header title="GST Invoices & Return Processing" subtitle="Complete Indian GST invoice workflow with automated return challan processing" />
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
