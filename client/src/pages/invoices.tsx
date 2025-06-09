@@ -10,6 +10,7 @@ import { Header } from "@/components/layout/header";
 import { generatePDF } from "@/utils/pdf-generator";
 import { QuotationModal } from "@/components/modals/quotation-modal";
 import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
+import { ReturnTrackingModal } from "@/components/modals/return-tracking-modal";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -422,25 +423,18 @@ export default function Invoices() {
                 gstInvoice={selectedGstInvoice}
               />
 
-              <Dialog open={returnTrackingOpen} onOpenChange={setReturnTrackingOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Truck className="h-4 w-4 mr-2" />
-                    Return Tracking
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Create Return Tracking</DialogTitle>
-                    <DialogDescription>
-                      Create a new return tracking entry for inventory items
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="p-4 text-center text-gray-500">
-                    Return tracking form will be implemented here
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                variant="outline"
+                onClick={() => setReturnTrackingOpen(true)}
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Return Tracking
+              </Button>
+
+              <ReturnTrackingModal
+                open={returnTrackingOpen}
+                onOpenChange={setReturnTrackingOpen}
+              />
             </div>
           </div>
 

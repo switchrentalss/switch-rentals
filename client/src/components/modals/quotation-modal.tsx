@@ -130,18 +130,20 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   const gstAmount = totalBeforeGst * (gstRate / 100);
   const totalAmount = totalBeforeGst + gstAmount;
 
-  // Update item totals when dates change
+  // Update item totals when any relevant field changes
   useEffect(() => {
     const startDate = form.watch("startDate");
     const endDate = form.watch("endDate");
     
     if (startDate && endDate) {
       watchedItems.forEach((item, index) => {
-        const total = calculateItemTotal(item.quantity, item.ratePerDay, startDate, endDate);
-        form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
+        if (item.quantity && item.ratePerDay) {
+          const total = calculateItemTotal(item.quantity, item.ratePerDay, startDate, endDate);
+          form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
+        }
       });
     }
-  }, [form.watch("startDate"), form.watch("endDate"), watchedItems]);
+  }, [form.watch("startDate"), form.watch("endDate"), watchedItems, form.watch("items")]);
 
   const onSubmit = (data: FormData) => {
     const invoiceData = {
@@ -381,6 +383,14 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                                 field.onChange(parseInt(value));
                                 if (selectedItem) {
                                   form.setValue(`items.${index}.ratePerDay`, selectedItem.ratePerDay);
+                                  // Trigger recalculation
+                                  const quantity = form.getValues(`items.${index}.quantity`);
+                                  const startDate = form.getValues("startDate");
+                                  const endDate = form.getValues("endDate");
+                                  if (quantity && startDate && endDate) {
+                                    const total = calculateItemTotal(quantity, selectedItem.ratePerDay, startDate, endDate);
+                                    form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
+                                  }
                                 }
                               }}
                             >
@@ -416,6 +426,14 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                                 onChange={(e) => {
                                   const newValue = e.target.value === "" ? "" : parseInt(e.target.value);
                                   field.onChange(newValue);
+                                  // Trigger recalculation when quantity changes
+                                  const ratePerDay = form.getValues(`items.${index}.ratePerDay`);
+                                  const startDate = form.getValues("startDate");
+                                  const endDate = form.getValues("endDate");
+                                  if (newValue && ratePerDay && startDate && endDate) {
+                                    const total = calculateItemTotal(parseInt(e.target.value), ratePerDay, startDate, endDate);
+                                    form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
+                                  }
                                 }}
                                 onFocus={(e) => e.target.select()} // Select all text on focus
                                 value={field.value === 0 ? "" : field.value} // Show empty string instead of 0
