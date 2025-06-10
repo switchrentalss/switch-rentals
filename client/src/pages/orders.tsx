@@ -131,50 +131,78 @@ export default function Orders() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <Header 
-        title="Orders Management" 
-        subtitle="Create and manage rental orders with simple workflow"
-        onNewOrder={() => setShowOrderModal(true)}
-      />
-      
-      <div className="p-6 space-y-6 flex-1">
-        {/* Search and Filters */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="flex-1 relative">
+    <>
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        <Header 
+          title="Orders Management" 
+          subtitle="Create and manage rental orders with simple workflow"
+          onNewOrder={() => setShowOrderModal(true)}
+        />
+        
+        <div className="p-6 space-y-6 flex-1">
+        {/* Top Controls Bar */}
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            {/* Left side - Search and Filters */}
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Search orders by number, customer, or event..."
+                  placeholder="Search Orders"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-10"
                 />
               </div>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40 h-10">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="returned">Returned</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Right side - Actions */}
+            <div className="flex gap-2">
               <Button variant="outline" size="sm">
-                <Filter className="w-4 h-4 mr-2" />
-                Filter
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button onClick={() => setShowOrderModal(true)} className="bg-blue-600 hover:bg-blue-700 h-10">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Order
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Orders Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Orders List */}
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="px-4 py-3 border-b bg-gray-50">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Orders</h3>
+              <span className="text-sm text-gray-500">
+                {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
+              </span>
+            </div>
+          </div>
+          
             {isLoading ? (
-              <div className="space-y-4">
+              <div className="p-4 space-y-3">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 bg-gray-100 rounded animate-pulse" />
+                  <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
                 ))}
               </div>
             ) : filteredOrders.length === 0 ? (
               <div className="text-center py-12">
-                <ClipboardList className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
                   {searchTerm ? "No orders found" : "No orders yet"}
                 </h3>
@@ -185,128 +213,145 @@ export default function Orders() {
                   }
                 </p>
                 {!searchTerm && (
-                  <Button onClick={() => setShowOrderModal(true)}>
+                  <Button onClick={() => setShowOrderModal(true)} className="bg-blue-600 hover:bg-blue-700">
+                    <Plus className="w-4 h-4 mr-2" />
                     Create New Order
                   </Button>
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredOrders.map((order) => (
-                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{order.orderNumber}</div>
-                            <div className="text-sm text-gray-500">
-                              Created {format(new Date(order.createdAt), "MMM dd, yyyy")}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{order.customer.name}</div>
-                            <div className="text-sm text-gray-500">{order.customer.company}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {format(new Date(order.eventDate), "MMM dd, yyyy")}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {order.items.length} items
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ₹{order.totalAmount}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge variant={getStatusBadgeVariant(order.status)}>
-                            {order.status}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {format(new Date(order.endDate), "MMM dd, yyyy")}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => {
-                                setEditingOrder(order);
-                                setShowOrderModal(true);
-                              }}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Order
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setEditingOrder(order);
-                                setShowOrderModal(true);
-                              }}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Order
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                // Navigate to inventory returns with order filter
-                                window.location.href = `/inventory-returns?order=${order.id}`;
-                              }}>
-                                <Package className="w-4 h-4 mr-2" />
-                                Track Items
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                // Navigate to invoices page with order filter
-                                window.location.href = `/invoices?order=${order.id}`;
-                              }}>
-                                <FileText className="w-4 h-4 mr-2" />
-                                Generate Invoice
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => {
-                                  setOrderToDelete(order);
-                                  setDeleteDialogOpen(true);
-                                }}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Cancel Order
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="divide-y divide-gray-200">
+                {/* Table Header */}
+                <div className="grid grid-cols-8 gap-4 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  <div className="col-span-1">Order Date</div>
+                  <div className="col-span-1">Status</div>
+                  <div className="col-span-1">Order Number</div>
+                  <div className="col-span-1">Draft Title</div>
+                  <div className="col-span-2">Company</div>
+                  <div className="col-span-1">Buyer</div>
+                  <div className="col-span-1">Ship Start</div>
+                </div>
+
+                {/* Order Rows */}
+                {filteredOrders.map((order) => (
+                  <div 
+                    key={order.id} 
+                    className="grid grid-cols-8 gap-4 px-4 py-4 hover:bg-gray-50 transition-colors items-center group"
+                  >
+                    {/* Status Circle + Date */}
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                        order.status === 'active' ? 'bg-green-500' :
+                        order.status === 'pending' ? 'bg-yellow-500' :
+                        order.status === 'overdue' ? 'bg-red-500' :
+                        'bg-gray-500'
+                      }`}>
+                        {order.status === 'active' ? '✓' :
+                         order.status === 'pending' ? '⏳' :
+                         order.status === 'overdue' ? '⚠' : '○'}
+                      </div>
+                      <div className="text-sm text-gray-900">
+                        {format(new Date(order.createdAt), "MMM dd, yyyy")}
+                      </div>
+                    </div>
+
+                    {/* Status Text */}
+                    <div className="text-sm font-medium capitalize">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </span>
+                    </div>
+
+                    {/* Order Number */}
+                    <div className="text-sm font-medium text-gray-900">
+                      {order.orderNumber}
+                    </div>
+
+                    {/* Draft Title / Event Details */}
+                    <div className="text-sm text-gray-600 truncate">
+                      {order.eventDetails || "Order Details"}
+                    </div>
+
+                    {/* Company */}
+                    <div className="col-span-2">
+                      <div className="text-sm font-medium text-gray-900">{order.customer.name}</div>
+                      <div className="text-xs text-gray-500">{order.customer.company || order.customer.phone}</div>
+                    </div>
+
+                    {/* Buyer */}
+                    <div className="text-sm text-gray-900">
+                      {order.customer.name.split(' ')[0]}
+                    </div>
+
+                    {/* Ship Start */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-900">
+                        {format(new Date(order.startDate), "MMM dd, yyyy")}
+                      </div>
+                      
+                      {/* Actions */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => {
+                            setEditingOrder(order);
+                            setShowOrderModal(true);
+                          }}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setEditingOrder(order);
+                            setShowOrderModal(true);
+                          }}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            window.location.href = `/inventory-returns?order=${order.id}`;
+                          }}>
+                            <Package className="w-4 h-4 mr-2" />
+                            Track Items
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            window.location.href = `/invoices?order=${order.id}`;
+                          }}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            Generate Invoice
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              setOrderToDelete(order);
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Cancel Order
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <OrderModal 
+      <SimpleOrderModal 
         open={showOrderModal} 
         onOpenChange={(open) => {
           setShowOrderModal(open);
           if (!open) setEditingOrder(null);
         }}
-        editingOrder={editingOrder}
       />
 
       <ReturnChallanModal
@@ -339,6 +384,6 @@ export default function Orders() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
