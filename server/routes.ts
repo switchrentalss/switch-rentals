@@ -171,9 +171,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const createOrderItemSchema = insertOrderItemSchema.omit({ orderId: true });
+  
   const createOrderSchema = z.object({
     order: insertOrderSchema,
-    items: z.array(insertOrderItemSchema)
+    items: z.array(createOrderItemSchema)
   });
 
   app.post("/api/orders", async (req, res) => {

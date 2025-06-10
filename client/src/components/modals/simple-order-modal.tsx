@@ -130,12 +130,20 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
   const handleSubmit = () => {
     if (!customerId || !dispatchDate || !startDate || !endDate || selectedItems.length === 0) {
       toast({
-        title: "⚠️ Missing Information",
+        title: "Missing Information",
         description: "Please fill all required fields and add at least one item",
         variant: "destructive",
       });
       return;
     }
+
+    // Prepare items data for API
+    const orderItems = selectedItems.map(item => ({
+      itemId: item.itemId,
+      quantity: item.quantity,
+      ratePerDay: item.ratePerDay.toString(),
+      totalAmount: item.totalAmount.toString(),
+    }));
 
     createOrderMutation.mutate({
       customerId,
@@ -143,7 +151,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
       startDate,
       endDate,
       eventDetails,
-      items: selectedItems,
+      items: orderItems,
       totalAmount,
     });
   };
@@ -161,12 +169,12 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center">📋 Create New Order</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           {/* Customer Selection */}
           <Card>
             <CardContent className="p-4">
@@ -247,78 +255,84 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
           {/* Add Items */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <Package className="h-5 w-5 text-purple-600" />
-                <Label className="text-lg font-semibold">Add Items</Label>
+                <Label className="text-lg font-semibold">Select Items</Label>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="md:col-span-2">
-                  <Label className="text-base font-medium">Select Item</Label>
-                  <Select value={selectedItemId.toString()} onValueChange={(value) => setSelectedItemId(parseInt(value))}>
-                    <SelectTrigger className="h-12 text-lg">
-                      <SelectValue placeholder="Choose an item..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {inventory?.map((item) => (
-                        <SelectItem key={item.id} value={item.id.toString()}>
-                          <div className="py-2">
-                            <div className="font-semibold">{item.name}</div>
-                            <div className="text-sm text-gray-600">₹{item.ratePerDay}/day</div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-base font-medium">Quantity</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                      className="h-12 text-lg"
-                    />
-                    <Button onClick={handleAddItem} className="h-12 px-6 bg-green-600 hover:bg-green-700">
-                      <Plus className="h-5 w-5" />
-                    </Button>
+              
+              {/* Available Items List */}
+              <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-2">
+                {inventory?.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                    <div className="flex-1">
+                      <div className="font-semibold text-lg">{item.name}</div>
+                      <div className="text-green-600 font-medium">₹{item.ratePerDay}/day</div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={
+                          selectedItems.find(si => si.itemId === item.id)?.quantity || 0
+                        }
+                        onChange={(e) => {
+                          const qty = parseInt(e.target.value) || 0;
+                          if (qty === 0) {
+                            // Remove item if quantity is 0
+                            setSelectedItems(selectedItems.filter(si => si.itemId !== item.id));
+                          } else {
+                            const existingItemIndex = selectedItems.findIndex(si => si.itemId === item.id);
+                            if (existingItemIndex >= 0) {
+                              // Update existing item
+                              const updatedItems = [...selectedItems];
+                              updatedItems[existingItemIndex].quantity = qty;
+                              updatedItems[existingItemIndex].totalAmount = qty * parseFloat(item.ratePerDay);
+                              setSelectedItems(updatedItems);
+                            } else {
+                              // Add new item
+                              const newItem: SelectedItem = {
+                                itemId: item.id,
+                                itemName: item.name,
+                                quantity: qty,
+                                ratePerDay: parseFloat(item.ratePerDay),
+                                totalAmount: qty * parseFloat(item.ratePerDay),
+                              };
+                              setSelectedItems([...selectedItems, newItem]);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Backspace' && e.currentTarget.value === '0') {
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                        className="w-20 h-10 text-center text-lg font-semibold"
+                        placeholder="0"
+                      />
+                      
+                      <div className="text-right min-w-24">
+                        <div className="text-lg font-bold text-blue-600">
+                          ₹{((selectedItems.find(si => si.itemId === item.id)?.quantity || 0) * parseFloat(item.ratePerDay)).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Selected Items */}
+          {/* Order Summary */}
           {selectedItems.length > 0 && (
-            <Card>
+            <Card className="bg-blue-50 border-blue-200">
               <CardContent className="p-4">
-                <Label className="text-lg font-semibold mb-3 block">Selected Items</Label>
-                <div className="space-y-2">
-                  {selectedItems.map((item) => (
-                    <div key={item.itemId} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                      <div className="flex-1">
-                        <div className="font-semibold text-lg">{item.itemName}</div>
-                        <div className="text-gray-600">
-                          {item.quantity} × ₹{item.ratePerDay}/day = ₹{item.totalAmount.toFixed(2)}
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRemoveItem(item.itemId)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold">Total Estimate</span>
-                    <span className="text-2xl font-bold text-green-600">₹{totalAmount.toFixed(2)}</span>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-lg font-semibold">Order Total</span>
+                    <div className="text-sm text-gray-600">{selectedItems.length} items selected</div>
                   </div>
+                  <span className="text-3xl font-bold text-blue-600">₹{totalAmount.toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
