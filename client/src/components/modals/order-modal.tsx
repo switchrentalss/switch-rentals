@@ -295,8 +295,12 @@ export function OrderModal({ open, onOpenChange }: OrderModalProps) {
                         type="number"
                         placeholder="Quantity"
                         value={item.quantity}
-                        onChange={(e) => updateItem(index, { quantity: parseInt(e.target.value) || 1 })}
+                        onChange={(e) => {
+                          const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                          updateItem(index, { quantity: newQuantity });
+                        }}
                         min="1"
+                        step="1"
                       />
 
                       <div className="flex items-center space-x-2">
