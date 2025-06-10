@@ -224,31 +224,31 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
           {/* Search and Select Items */}
           <Card>
             <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Package className="h-5 w-5 text-purple-600" />
-                <Label className="text-xl font-bold">Select Items</Label>
+              <div className="flex items-center gap-2 mb-6">
+                <Package className="h-6 w-6 text-purple-600" />
+                <Label className="text-2xl font-bold">Select Items</Label>
               </div>
               
               {/* Search Bar */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <div className="relative mb-6">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder="Search items by name..."
+                  placeholder="Search items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-12 h-12 text-lg border-2 border-gray-300 focus:border-blue-500"
+                  className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 rounded-lg"
                 />
               </div>
 
               {/* Category Filter */}
-              <div className="flex flex-wrap gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-6">
                 {Array.from(new Set(inventory?.map(item => item.category) || [])).map((category) => (
                   <Button
                     key={category}
                     variant={selectedCategory === category ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSelectedCategory(selectedCategory === category ? "" : category)}
-                    className="rounded-full"
+                    className="rounded-full px-4 py-2"
                   >
                     {category}
                   </Button>
@@ -258,26 +258,116 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedCategory("")}
-                    className="rounded-full text-gray-500"
+                    className="rounded-full px-4 py-2 text-gray-500"
                   >
                     Clear Filter
                   </Button>
                 )}
               </div>
 
-              {/* Items Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+              {/* Selected Items Cart Style */}
+              {selectedItems.length > 0 && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-bold text-lg mb-4 text-gray-800">Selected Items</h3>
+                  <div className="space-y-3">
+                    {selectedItems.map((selectedItem) => {
+                      const item = inventory?.find(i => i.id === selectedItem.itemId);
+                      if (!item) return null;
+                      
+                      return (
+                        <div key={selectedItem.itemId} className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                              <Package className="w-6 h-6 text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                              <p className="text-sm text-gray-600">₹{item.ratePerDay}/day</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            {/* Quantity Controls */}
+                            <div className="flex items-center gap-1 border rounded-lg">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newQty = Math.max(0, selectedItem.quantity - 1);
+                                  if (newQty === 0) {
+                                    setSelectedItems(selectedItems.filter(si => si.itemId !== selectedItem.itemId));
+                                  } else {
+                                    const updatedItems = [...selectedItems];
+                                    const itemIndex = updatedItems.findIndex(si => si.itemId === selectedItem.itemId);
+                                    updatedItems[itemIndex].quantity = newQty;
+                                    updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
+                                    setSelectedItems(updatedItems);
+                                  }
+                                }}
+                                className="w-10 h-10 p-0 hover:bg-gray-100"
+                                disabled={selectedItem.quantity <= 1}
+                              >
+                                -
+                              </Button>
+                              
+                              <span className="w-12 text-center font-semibold text-lg">
+                                {selectedItem.quantity}
+                              </span>
+                              
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newQty = selectedItem.quantity + 1;
+                                  const updatedItems = [...selectedItems];
+                                  const itemIndex = updatedItems.findIndex(si => si.itemId === selectedItem.itemId);
+                                  updatedItems[itemIndex].quantity = newQty;
+                                  updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
+                                  setSelectedItems(updatedItems);
+                                }}
+                                className="w-10 h-10 p-0 hover:bg-gray-100"
+                              >
+                                +
+                              </Button>
+                            </div>
+                            
+                            {/* Price */}
+                            <div className="text-right min-w-20">
+                              <div className="font-bold text-lg">₹{selectedItem.totalAmount.toFixed(2)}</div>
+                            </div>
+                            
+                            {/* Remove Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedItems(selectedItems.filter(si => si.itemId !== selectedItem.itemId));
+                              }}
+                              className="w-10 h-10 p-0 text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Available Items */}
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                <h3 className="font-bold text-lg text-gray-800 sticky top-0 bg-white py-2">Available Items</h3>
                 {filteredInventory?.map((item) => {
-                  const selectedQty = selectedItems.find(si => si.itemId === item.id)?.quantity || 0;
-                  const isSelected = selectedQty > 0;
+                  const isSelected = selectedItems.some(si => si.itemId === item.id);
                   
                   return (
                     <div 
                       key={item.id} 
-                      className={`border-2 rounded-xl p-4 transition-all duration-200 cursor-pointer hover:shadow-lg ${
+                      className={`flex items-center justify-between p-4 border rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md ${
                         isSelected 
-                          ? 'border-blue-500 bg-blue-50 shadow-md' 
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
                       }`}
                       onClick={() => {
                         if (!isSelected) {
@@ -292,94 +382,43 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                         }
                       }}
                     >
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                          <Package className="w-6 h-6 text-gray-600" />
+                        </div>
                         <div className="flex-1">
-                          <h3 className="font-bold text-lg text-gray-900 leading-tight">
-                            {item.name}
-                          </h3>
-                          <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-2xl font-bold text-green-600">₹{item.ratePerDay}</span>
+                          <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                          <p className="text-sm text-gray-600">{item.description}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="font-bold text-green-600">₹{item.ratePerDay}</span>
                             <span className="text-sm text-gray-500">/day</span>
                           </div>
                         </div>
-                        
-                        {isSelected && (
-                          <div className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-                            ✓
-                          </div>
-                        )}
                       </div>
-
-                      {isSelected && (
-                        <div className="border-t pt-3 mt-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-700">Quantity:</span>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newQty = Math.max(0, selectedQty - 1);
-                                  if (newQty === 0) {
-                                    setSelectedItems(selectedItems.filter(si => si.itemId !== item.id));
-                                  } else {
-                                    const updatedItems = [...selectedItems];
-                                    const itemIndex = updatedItems.findIndex(si => si.itemId === item.id);
-                                    updatedItems[itemIndex].quantity = newQty;
-                                    updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
-                                    setSelectedItems(updatedItems);
-                                  }
-                                }}
-                                className="w-8 h-8 p-0"
-                              >
-                                -
-                              </Button>
-                              
-                              <Input
-                                type="number"
-                                min="1"
-                                value={selectedQty}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const qty = parseInt(e.target.value) || 1;
-                                  const updatedItems = [...selectedItems];
-                                  const itemIndex = updatedItems.findIndex(si => si.itemId === item.id);
-                                  updatedItems[itemIndex].quantity = qty;
-                                  updatedItems[itemIndex].totalAmount = qty * parseFloat(item.ratePerDay);
-                                  setSelectedItems(updatedItems);
-                                }}
-                                className="w-16 h-8 text-center text-lg font-bold"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newQty = selectedQty + 1;
-                                  const updatedItems = [...selectedItems];
-                                  const itemIndex = updatedItems.findIndex(si => si.itemId === item.id);
-                                  updatedItems[itemIndex].quantity = newQty;
-                                  updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
-                                  setSelectedItems(updatedItems);
-                                }}
-                                className="w-8 h-8 p-0"
-                              >
-                                +
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center mt-2">
-                            <span className="font-medium text-gray-700">Total:</span>
-                            <span className="text-xl font-bold text-blue-600">
-                              ₹{(selectedQty * parseFloat(item.ratePerDay)).toFixed(2)}
-                            </span>
-                          </div>
+                      
+                      {isSelected ? (
+                        <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+                          ✓
                         </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newItem: SelectedItem = {
+                              itemId: item.id,
+                              itemName: item.name,
+                              quantity: 1,
+                              ratePerDay: parseFloat(item.ratePerDay),
+                              totalAmount: parseFloat(item.ratePerDay),
+                            };
+                            setSelectedItems([...selectedItems, newItem]);
+                          }}
+                          className="px-4 py-2"
+                        >
+                          Add
+                        </Button>
                       )}
                     </div>
                   );
