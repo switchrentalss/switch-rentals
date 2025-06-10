@@ -25,8 +25,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Search, Filter, Plus, Mail, Phone, Edit, MoreHorizontal, Trash2, Eye, FileText } from "lucide-react";
-import type { Customer } from "@shared/schema";
+import { Users, Search, Filter, Plus, Mail, Phone, Edit, MoreHorizontal, Trash2, Eye, FileText, Calendar, DollarSign, TrendingUp, Package } from "lucide-react";
+import type { Customer, OrderWithCustomer } from "@shared/schema";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 export default function Customers() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -34,10 +37,17 @@ export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [showCustomerDetailsModal, setShowCustomerDetailsModal] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const { toast } = useToast();
 
   const { data: customers, isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
+  });
+
+  const { data: customerOrders } = useQuery<OrderWithCustomer[]>({
+    queryKey: ["/api/orders", selectedCustomerId],
+    enabled: !!selectedCustomerId,
   });
 
   const deleteCustomerMutation = useMutation({
@@ -67,6 +77,21 @@ export default function Customers() {
     customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.company?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  // Calculate financial metrics for selected customer
+  const customerFinancials = selectedCustomerId && customerOrders ? {
+    totalOrders: customerOrders.filter(order => order.customerId === selectedCustomerId).length,
+    totalBillValue: customerOrders
+      .filter(order => order.customerId === selectedCustomerId)
+      .reduce((sum, order) => sum + parseFloat(order.totalAmount), 0),
+    activeOrders: customerOrders
+      .filter(order => order.customerId === selectedCustomerId && order.status === 'active').length,
+    completedOrders: customerOrders
+      .filter(order => order.customerId === selectedCustomerId && order.status === 'returned').length
+  } : null;
+
+  const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
+  const customerOrdersList = customerOrders?.filter(order => order.customerId === selectedCustomerId) || [];
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -184,11 +209,11 @@ export default function Customers() {
                           Edit Customer
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => {
-                          // Navigate to orders page with customer filter
-                          window.location.href = `/orders?customer=${customer.id}`;
+                          setSelectedCustomerId(customer.id);
+                          setShowCustomerDetailsModal(true);
                         }}>
                           <FileText className="w-4 h-4 mr-2" />
-                          View Orders
+                          View Orders & Financial Summary
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
