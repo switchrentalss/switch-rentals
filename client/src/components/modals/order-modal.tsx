@@ -16,13 +16,13 @@ import type { Customer, InventoryItem } from "@shared/schema";
 
 const orderSchema = z.object({
   customerId: z.number().min(1, "Please select a customer"),
-  eventDate: z.string().min(1, "Event date is required"),
+  eventDate: z.string().min(1, "Dispatch date is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   eventDetails: z.string().optional(),
   items: z.array(z.object({
     itemId: z.number().min(1),
-    quantity: z.number().min(1),
+    quantity: z.number().min(1, "Quantity must be at least 1"),
     ratePerDay: z.string(),
     totalAmount: z.string(),
   })).min(1, "At least one item is required"),
@@ -202,7 +202,7 @@ export function OrderModal({ open, onOpenChange }: OrderModalProps) {
                 name="eventDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Event Date</FormLabel>
+                    <FormLabel>Dispatch Date</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>

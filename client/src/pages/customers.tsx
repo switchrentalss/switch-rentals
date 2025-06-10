@@ -284,6 +284,138 @@ export default function Customers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Customer Details Modal with Financial Overview */}
+      <Dialog open={showCustomerDetailsModal} onOpenChange={setShowCustomerDetailsModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Customer Details & Financial Overview</DialogTitle>
+          </DialogHeader>
+          
+          {selectedCustomer && (
+            <div className="space-y-6">
+              {/* Customer Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-medium text-lg">{selectedCustomer.name}</h3>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <div className="flex items-center">
+                      <Mail className="w-4 h-4 mr-2" />
+                      {selectedCustomer.email}
+                    </div>
+                    <div className="flex items-center">
+                      <Phone className="w-4 h-4 mr-2" />
+                      {selectedCustomer.phone}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <p><strong>Company:</strong> {selectedCustomer.company || 'N/A'}</p>
+                  <p><strong>GST:</strong> {selectedCustomer.gstNumber || 'N/A'}</p>
+                  <p><strong>Address:</strong> {selectedCustomer.address}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Financial Overview */}
+              {customerFinancials && (
+                <div>
+                  <h4 className="font-medium mb-4">Financial Overview</h4>
+                  <div className="grid grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Total Orders</p>
+                            <p className="text-2xl font-bold">{customerFinancials.totalOrders}</p>
+                          </div>
+                          <FileText className="w-8 h-8 text-blue-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Total Bill Value</p>
+                            <p className="text-2xl font-bold">₹{customerFinancials.totalBillValue.toLocaleString()}</p>
+                          </div>
+                          <DollarSign className="w-8 h-8 text-green-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Active Orders</p>
+                            <p className="text-2xl font-bold">{customerFinancials.activeOrders}</p>
+                          </div>
+                          <TrendingUp className="w-8 h-8 text-orange-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Completed Orders</p>
+                            <p className="text-2xl font-bold">{customerFinancials.completedOrders}</p>
+                          </div>
+                          <Package className="w-8 h-8 text-purple-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Orders List */}
+              <div>
+                <h4 className="font-medium mb-4">Recent Orders</h4>
+                {customerOrdersList.length > 0 ? (
+                  <div className="space-y-3">
+                    {customerOrdersList.map((order) => (
+                      <Card key={order.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{order.orderNumber}</p>
+                              <p className="text-sm text-gray-600">Event: {order.eventDetails}</p>
+                              <p className="text-sm text-gray-600">
+                                <Calendar className="w-4 h-4 inline mr-1" />
+                                {new Date(order.eventDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <Badge variant={
+                                order.status === 'active' ? 'default' :
+                                order.status === 'pending' ? 'secondary' :
+                                order.status === 'returned' ? 'outline' : 'destructive'
+                              }>
+                                {order.status}
+                              </Badge>
+                              <p className="text-lg font-bold mt-1">₹{parseFloat(order.totalAmount).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-8">No orders found for this customer</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
