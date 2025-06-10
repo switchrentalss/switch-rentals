@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { OrderModal } from "@/components/modals/order-modal";
+import { SimpleOrderModal } from "@/components/modals/simple-order-modal";
 import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { 
   DropdownMenu,
@@ -25,9 +25,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ClipboardList, Search, Filter, Eye, MoreHorizontal, Edit, Package, FileText, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, Eye, MoreHorizontal, Edit, Package, FileText, Trash2, Download, Settings, ClipboardList } from "lucide-react";
 import { format } from "date-fns";
 import type { OrderWithCustomer, InvoiceWithCustomer } from "@shared/schema";
 
@@ -46,10 +54,27 @@ function getStatusBadgeVariant(status: string) {
   }
 }
 
+function getStatusColor(status: string) {
+  switch (status) {
+    case "active":
+      return "bg-green-100 text-green-800";
+    case "pending":
+      return "bg-yellow-100 text-yellow-800";
+    case "overdue":
+      return "bg-red-100 text-red-800";
+    case "returned":
+      return "bg-gray-100 text-gray-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
 export default function Orders() {
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<OrderWithCustomer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
+  const [editingOrder, setEditingOrder] = useState<OrderWithCustomer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<OrderWithCustomer | null>(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -82,17 +107,34 @@ export default function Orders() {
     },
   });
 
-  const filteredOrders = orders?.filter(order => 
-    order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.eventDetails?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredOrders = orders?.filter(order => {
+    if (statusFilter !== "all" && order.status !== statusFilter) return false;
+    return order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           order.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           order.eventDetails?.toLowerCase().includes(searchTerm.toLowerCase());
+  }) || [];
+
+  const handleSelectOrder = (orderId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedOrders([...selectedOrders, orderId]);
+    } else {
+      setSelectedOrders(selectedOrders.filter(id => id !== orderId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(filteredOrders.map(order => order.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-gray-50">
       <Header 
-        title="Orders" 
-        subtitle="Manage all your rental orders and track their status."
+        title="Orders Management" 
+        subtitle="Create and manage rental orders with simple workflow"
         onNewOrder={() => setShowOrderModal(true)}
       />
       
