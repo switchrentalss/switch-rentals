@@ -68,12 +68,12 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
     name: "items"
   });
 
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [] } = useQuery<any[]>({
     queryKey: ["/api/customers"],
     enabled: open
   });
 
-  const { data: inventoryItems = [] } = useQuery({
+  const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
     enabled: open
   });
@@ -118,12 +118,16 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   const sampleType = form.watch("sampleType");
 
   const calculateItemTotal = (quantity: number, ratePerDay: string, startDate: string, endDate: string) => {
-    if (!ratePerDay || !startDate || !endDate || !quantity) return 0;
+    if (!ratePerDay || !quantity) return 0;
     
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const timeDiff = end.getTime() - start.getTime();
-    const days = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+    // Calculate number of rental days if dates are provided
+    let days = 1; // Default to 1 day
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const timeDiff = end.getTime() - start.getTime();
+      days = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+    }
     
     return quantity * parseFloat(ratePerDay) * days;
   };
@@ -156,27 +160,32 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   }, [form.watch("startDate"), form.watch("endDate"), watchedItems, form.watch("items")]);
 
   const onSubmit = (data: FormData) => {
+    const days = data.startDate && data.endDate ? 
+      Math.max(1, Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24))) : 1;
+
     const invoiceData = {
-      customerId: data.customerId,
-      invoiceType: "quotation",
-      dispatchDate: data.dispatchDate,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      eventDetails: data.eventDetails,
-      subtotal: subtotal.toFixed(2),
-      gstRate: gstRate.toString(),
-      gstAmount: gstAmount.toFixed(2),
-      totalAmount: totalAmount.toFixed(2),
-      depositAmount: data.depositAmount,
-      sampleType: data.sampleType,
-      status: "draft",
-      terms: data.terms,
-      notes: data.notes,
+      invoice: {
+        customerId: data.customerId,
+        invoiceType: "quotation",
+        dispatchDate: data.dispatchDate,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        eventDetails: data.eventDetails,
+        subtotal: subtotal.toFixed(2),
+        gstRate: gstRate.toString(),
+        gstAmount: gstAmount.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
+        depositAmount: data.depositAmount,
+        sampleType: data.sampleType,
+        status: "draft",
+        terms: data.terms,
+        notes: data.notes
+      },
       items: data.items.map(item => ({
         itemId: item.itemId,
         quantity: item.quantity,
         ratePerDay: item.ratePerDay,
-        days: Math.max(1, Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24))),
+        days: days,
         lineTotal: item.totalAmount
       }))
     };
@@ -214,7 +223,7 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {customers.map((customer: any) => (
+                        {(customers as any[]).map((customer: any) => (
                           <SelectItem key={customer.id} value={customer.id.toString()}>
                             {customer.name} - {customer.company}
                           </SelectItem>
@@ -389,7 +398,7 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                             <FormLabel>Item *</FormLabel>
                             <Select 
                               onValueChange={(value) => {
-                                const selectedItem = inventoryItems.find((item: any) => item.id === parseInt(value));
+                                const selectedItem = (inventoryItems as any[]).find((item: any) => item.id === parseInt(value));
                                 field.onChange(parseInt(value));
                                 if (selectedItem) {
                                   form.setValue(`items.${index}.ratePerDay`, selectedItem.ratePerDay);
@@ -410,7 +419,7 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {inventoryItems.map((item: any) => (
+                                {(inventoryItems as any[]).map((item: any) => (
                                   <SelectItem key={item.id} value={item.id.toString()}>
                                     {item.name} - ₹{item.ratePerDay}/day
                                   </SelectItem>
