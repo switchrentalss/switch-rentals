@@ -117,25 +117,15 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   const depositAmount = parseFloat(form.watch("depositAmount") || "0");
   const sampleType = form.watch("sampleType");
 
-  const calculateItemTotal = (quantity: number, ratePerDay: string, startDate: string, endDate: string) => {
+  const calculateItemTotal = (quantity: number, ratePerDay: string, startDate?: string, endDate?: string) => {
     if (!ratePerDay || !quantity) return 0;
     
-    // Calculate number of rental days if dates are provided
-    let days = 1; // Default to 1 day
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const timeDiff = end.getTime() - start.getTime();
-      days = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
-    }
-    
-    return quantity * parseFloat(ratePerDay) * days;
+    // Simple calculation: quantity × rate per day
+    return quantity * parseFloat(ratePerDay);
   };
 
   const subtotal = watchedItems.reduce((sum, item, index) => {
-    const startDate = form.watch("startDate");
-    const endDate = form.watch("endDate");
-    return sum + calculateItemTotal(item.quantity, item.ratePerDay, startDate, endDate);
+    return sum + calculateItemTotal(item.quantity, item.ratePerDay);
   }, 0);
 
   // Add sample charges if applicable
@@ -146,18 +136,13 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
 
   // Update item totals when any relevant field changes
   useEffect(() => {
-    const startDate = form.watch("startDate");
-    const endDate = form.watch("endDate");
-    
-    if (startDate && endDate) {
-      watchedItems.forEach((item, index) => {
-        if (item.quantity && item.ratePerDay) {
-          const total = calculateItemTotal(item.quantity, item.ratePerDay, startDate, endDate);
-          form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
-        }
-      });
-    }
-  }, [form.watch("startDate"), form.watch("endDate"), watchedItems, form.watch("items")]);
+    watchedItems.forEach((item, index) => {
+      if (item.quantity && item.ratePerDay) {
+        const total = calculateItemTotal(item.quantity, item.ratePerDay);
+        form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
+      }
+    });
+  }, [watchedItems]);
 
   const onSubmit = (data: FormData) => {
     const days = data.startDate && data.endDate ? 
@@ -404,10 +389,8 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                                   form.setValue(`items.${index}.ratePerDay`, selectedItem.ratePerDay);
                                   // Trigger recalculation
                                   const quantity = form.getValues(`items.${index}.quantity`);
-                                  const startDate = form.getValues("startDate");
-                                  const endDate = form.getValues("endDate");
-                                  if (quantity && startDate && endDate) {
-                                    const total = calculateItemTotal(quantity, selectedItem.ratePerDay, startDate, endDate);
+                                  if (quantity) {
+                                    const total = calculateItemTotal(quantity, selectedItem.ratePerDay);
                                     form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
                                   }
                                 }
@@ -447,10 +430,8 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                                   field.onChange(newValue);
                                   // Trigger recalculation when quantity changes
                                   const ratePerDay = form.getValues(`items.${index}.ratePerDay`);
-                                  const startDate = form.getValues("startDate");
-                                  const endDate = form.getValues("endDate");
-                                  if (newValue && ratePerDay && startDate && endDate) {
-                                    const total = calculateItemTotal(parseInt(e.target.value), ratePerDay, startDate, endDate);
+                                  if (newValue && ratePerDay) {
+                                    const total = calculateItemTotal(parseInt(e.target.value), ratePerDay);
                                     form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
                                   }
                                 }}
