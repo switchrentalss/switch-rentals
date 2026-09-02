@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { log } from "./log";
+import { serveStatic } from "./static";
 
 const app = express();
 app.use(express.json());
@@ -38,6 +39,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  console.log("boot", {
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT,
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    cwd: process.cwd(),
+  });
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -48,11 +56,7 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
-    const { serveStatic } = await import("./static");
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");
@@ -60,7 +64,14 @@ app.use((req, res, next) => {
   }
 
   const port = Number(process.env.PORT) || 5000;
-  server.listen(port, "0.0.0.0", () => {
-    log(`serving on port ${port}`);
+  await new Promise<void>((resolve, reject) => {
+    server.listen(port, "0.0.0.0", () => {
+      log(`serving on port ${port}`);
+      resolve();
+    });
+    server.on("error", reject);
   });
-})();
+})().catch((err) => {
+  console.error("failed to start", err);
+  process.exit(1);
+});

@@ -2,12 +2,21 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 
-export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+function clientBuildDir() {
+  const candidates = [
+    path.resolve(process.cwd(), "dist", "public"),
+    path.resolve(import.meta.dirname, "public"),
+    path.resolve(import.meta.dirname, "dist", "public"),
+  ];
+  return candidates.find((dir) => fs.existsSync(dir));
+}
 
-  if (!fs.existsSync(distPath)) {
+export function serveStatic(app: Express) {
+  const distPath = clientBuildDir();
+
+  if (!distPath) {
     throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
+      `Could not find the client build (cwd=${process.cwd()}, dirname=${import.meta.dirname})`,
     );
   }
 
