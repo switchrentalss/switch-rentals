@@ -37,8 +37,41 @@ export function toteCharge(boxesLost: number) {
 }
 
 export function todayIso(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+export function paperDate(invoice: {
+  invoiceType: string;
+  createdAt?: Date | string | null;
+  returnDate?: string | null;
+  endDate?: string | null;
+  startDate?: string | null;
+  dispatchDate?: string | null;
+}) {
+  const tax = invoice.invoiceType === "gst_invoice" || invoice.invoiceType === "final_invoice";
+  if (tax) return (invoice.returnDate || invoice.endDate || "").slice(0, 10);
+  if (invoice.createdAt) {
+    const instant = invoice.createdAt instanceof Date ? invoice.createdAt : new Date(invoice.createdAt);
+    if (!Number.isNaN(instant.getTime())) return todayIso(instant);
+  }
+  return todayIso();
+}
+
+/** Tax invoice after goods are back, or after the billed-until date. */
+export function taxInvoiceReady(
+  invoice: { endDate?: string | null; returnDate?: string | null },
+  asOf = todayIso(),
+) {
+  if (invoice.returnDate) return asOf >= invoice.returnDate.slice(0, 10);
+  if (!invoice.endDate) return false;
+  return asOf >= invoice.endDate.slice(0, 10);
+}
+
+export function amountToCollect(hireGross: number, deposit: number) {
+  return Math.max(0, hireGross) + Math.max(0, deposit);
 }

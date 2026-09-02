@@ -32,6 +32,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
   const [eventDetails, setEventDetails] = useState("");
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [alsoQuote, setAlsoQuote] = useState(true);
+  const [depositAmount, setDepositAmount] = useState("");
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -98,6 +99,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
             gstRate: "18.00",
             gstAmount: String(gst),
             totalAmount: String(net + gst),
+            depositAmount: String(Number(data.depositAmount || 0)),
             status: "draft",
           },
           items: data.items.map((item: SelectedItem) => ({
@@ -184,6 +186,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
       items: orderItems,
       totalAmount,
       alsoQuote,
+      depositAmount,
     });
   };
 
@@ -195,6 +198,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
     setEventDetails("");
     setSelectedItems([]);
     setAlsoQuote(true);
+    setDepositAmount("");
   };
 
   return (
@@ -315,6 +319,23 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                   <span>Before GST</span>
                   <span className="tabular-nums">{formatINR(totalAmount + packingOnRent(totalAmount))}</span>
                 </div>
+                {alsoQuote && (
+                  <div className="pt-2 space-y-1">
+                    <Label className="text-sm">Security deposit (held, not GST)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      placeholder="0"
+                    />
+                    {Number(depositAmount || 0) > 0 && (
+                      <p className="text-sm font-medium">
+                        To collect now {formatINR(totalAmount + packingOnRent(totalAmount) + Math.round((totalAmount + packingOnRent(totalAmount)) * billing.gstRate * 100) / 100 + Number(depositAmount))}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <label className="flex items-center gap-2 text-sm pt-2">
                   <input type="checkbox" checked={alsoQuote} onChange={(e) => setAlsoQuote(e.target.checked)} />
                   Also make a quotation (same pieces) to send on WhatsApp

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Header } from "@/components/layout/header";
 import { generateInvoicePDF, sendInvoiceAndToast } from "@/utils/pdf-generator";
 import { formatDate, formatINR } from "@/lib/format";
+import { amountToCollect, paperDate, taxInvoiceReady } from "@shared/hire";
 import { QuotationModal } from "@/components/modals/quotation-modal";
 import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { ReturnTrackingModal } from "@/components/modals/return-tracking-modal";
@@ -41,6 +42,7 @@ interface Invoice {
   dispatchDate: string;
   startDate: string;
   endDate: string;
+  returnDate?: string | null;
   eventDetails: string;
   subtotal: string;
   gstRate: string;
@@ -168,7 +170,10 @@ export default function Invoices() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoiceType })
       });
-      if (!response.ok) throw new Error("Failed to convert invoice");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to convert invoice");
+      }
       return response.json();
     },
     onSuccess: async (invoice) => {
@@ -183,10 +188,10 @@ export default function Invoices() {
         await sendInvoiceAndToast(invoice, toast);
       }
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: "Failed to convert invoice",
+        title: "Could not convert",
+        description: error.message || "Failed to convert invoice",
         variant: "destructive"
       });
     }
@@ -278,13 +283,31 @@ export default function Invoices() {
         <CardContent>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Dispatch Date:</span>
+              <span className="text-gray-600">Paper date:</span>
+              <span>{formatDate(paperDate(invoice))}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Dispatch:</span>
               <span>{formatDate(invoice.dispatchDate)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Amount:</span>
+              <span className="text-gray-600">Hire / tax amount:</span>
               <span className="font-semibold">{formatINR(invoice.totalAmount)}</span>
             </div>
+            {Number(invoice.depositAmount || 0) > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Deposit (not revenue):</span>
+                  <span>{formatINR(invoice.depositAmount)}</span>
+                </div>
+                {(invoice.invoiceType === "proforma" || invoice.invoiceType === "quotation") && (
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>To collect now:</span>
+                    <span>{formatINR(amountToCollect(Number(invoice.totalAmount), Number(invoice.depositAmount)))}</span>
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">GST ({invoice.gstRate}%):</span>
               <span>{formatINR(invoice.gstAmount)}</span>
@@ -325,11 +348,13 @@ export default function Invoices() {
                   variant="default" 
                   size="sm" 
                   onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'gst_invoice' })}
-                  disabled={convertToInvoice.isPending}
+                  disabled={convertToInvoice.isPending || !taxInvoiceReady(invoice)}
                   className="w-full"
                 >
                   <ArrowRight className="h-3 w-3 mr-1" />
-                  To GST Invoice
+                  {taxInvoiceReady(invoice)
+                    ? "To GST Invoice"
+                    : `Tax invoice after ${(invoice.returnDate || invoice.endDate || "").slice(0, 10)}`}
                 </Button>
               )}
               {invoice.invoiceType === 'gst_invoice' && invoice.status !== 'void' && (

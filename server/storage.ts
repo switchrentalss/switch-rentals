@@ -42,7 +42,7 @@ import {
   type CapitalEntry,
   type InsertCapitalEntry,
 } from "@shared/schema";
-import { isInvoicePaymentKind, lateReturnCharge, toteCharge } from "@shared/hire";
+import { isInvoicePaymentKind, lateReturnCharge, toteCharge, taxInvoiceReady } from "@shared/hire";
 import { db } from "./db";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { readFileSync } from "fs";
@@ -644,6 +644,15 @@ export class DatabaseStorage implements IStorage {
       const quote = await this.getInvoice(quoteId);
       if (!quote) {
         throw new Error('Quote not found');
+      }
+
+      if (invoiceType === "gst_invoice" || invoiceType === "final_invoice") {
+        if (!taxInvoiceReady(quote)) {
+          const from = (quote.returnDate || quote.endDate || "").slice(0, 10);
+          throw new Error(
+            `Hire has not ended. Make the tax invoice on or after ${from} (hire end / return). Deposit stays a holding until then.`,
+          );
+        }
       }
 
       const invoiceData: InsertInvoice = {

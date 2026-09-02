@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { site } from "@/site/content";
 import { billing } from "@/lib/billing";
 import { openWhatsApp, quotationWhatsAppText } from "@/lib/whatsapp";
+import { amountToCollect, paperDate } from "@shared/hire";
 
 export interface InvoiceData {
   id: number;
@@ -20,6 +21,8 @@ export interface InvoiceData {
   dispatchDate: string;
   startDate: string;
   endDate: string;
+  returnDate?: string | null;
+  createdAt?: string | Date | null;
   eventDetails?: string;
   items?: Array<{
     item: {
@@ -144,7 +147,7 @@ export function buildInvoicePdf(invoice: InvoiceData) {
   y += 8;
 
   doc.setFontSize(10);
-  doc.text(`Date: ${ordinalDate(invoice.dispatchDate || invoice.startDate)}`, 15, y);
+  doc.text(`Date: ${ordinalDate(paperDate(invoice))}`, 15, y);
   y += 8;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
@@ -190,6 +193,9 @@ export function buildInvoicePdf(invoice: InvoiceData) {
   y += 10;
 
   const c = chargeLines(invoice);
+  const deposit = n(invoice.depositAmount);
+  const collect = amountToCollect(c.gross, deposit);
+  const isAsk = invoice.invoiceType === "proforma" || invoice.invoiceType === "quotation";
   const chargeRows: [string, string][] = [
     [`Rent for ${ordinalDate(invoice.startDate)}`, money(c.rent)],
     [`Discount${c.discountPct ? ` -@${c.discountPct}%` : ""}`, money(c.discount)],
@@ -200,10 +206,18 @@ export function buildInvoicePdf(invoice: InvoiceData) {
     ["CGST 9%", money(c.cgst)],
     ["SGST 9%", money(c.sgst)],
     ["TOTAL GST (B)", money(c.gst)],
-    ["TOTAL AMOUNT (A+B)", money(c.gross)],
-    ["Advance Received", "0"],
-    ["Total Due for rent (before damages & loss of product if any post event)", money(c.gross)],
+    ["TOTAL AMOUNT (A+B) — hire / tax invoice", money(c.gross)],
   ];
+  if (isAsk) {
+    chargeRows.push(
+      ["Security deposit (held — not GST, not rent)", money(deposit)],
+      ["Amount to collect now (hire + deposit)", money(collect)],
+    );
+  } else {
+    chargeRows.push(
+      ["Total due on this tax invoice (excludes deposit)", money(c.gross)],
+    );
+  }
 
   autoTable(doc, {
     startY: y,
@@ -214,20 +228,43 @@ export function buildInvoicePdf(invoice: InvoiceData) {
       1: { cellWidth: 50, halign: "right" },
     },
     body: chargeRows.map((row, i) => {
-      const bold = [5, 8, 9, 11].includes(i);
+      const last = i === chargeRows.length - 1;
+      const hireTotal = i === 9;
+      const bold = i === 5 || i === 8 || hireTotal || last;
       return [
         { content: row[0], styles: { fontStyle: bold ? "bold" : "normal" } },
         { content: row[1], styles: { fontStyle: bold ? "bold" : "normal", halign: "right" } },
       ];
     }),
     didParseCell: (data) => {
-      if (data.section === "body" && (data.row.index === 9 || data.row.index === 11)) {
+      if (data.section === "body" && (data.row.index === 9 || data.row.index === chargeRows.length - 1)) {
         data.cell.styles.fillColor = [245, 236, 228];
       }
     },
   });
 
   y = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y) + 8;
+  if (isAsk && deposit > 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.text(
+      `Deposit INR ${money(deposit)} is a holding. It is not revenue. Refund after return if there is no breakage, or apply it to damages / unpaid hire.`,
+      15,
+      y,
+      { maxWidth: pageW - 30 },
+    );
+    y += 10;
+  } else if (!isAsk && deposit > 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.text(
+      `Security deposit INR ${money(deposit)} is not part of this tax invoice. Refund it after return, or apply it to breakage / unpaid hire in Books.`,
+      15,
+      y,
+      { maxWidth: pageW - 30 },
+    );
+    y += 10;
+  }
   if (invoice.invoiceType === "gst_invoice" || invoice.invoiceType === "final_invoice") {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(9);

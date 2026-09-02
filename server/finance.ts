@@ -133,9 +133,9 @@ export async function getSwitchFinance() {
     if (parts.net < -1) status = "credit";
     else if (pending < 2) status = "collected";
     else if (collected >= 2) status = "partial";
-      const billedMonth = monthKey(invoice.startDate) || monthKey(invoice.dispatchDate);
+      const billedMonth = monthKey(invoice.returnDate) || monthKey(invoice.endDate) || monthKey(invoice.startDate);
       const asOf = new Date();
-      const billedAt = new Date(invoice.startDate || invoice.dispatchDate);
+      const billedAt = new Date(invoice.returnDate || invoice.endDate || invoice.startDate);
       const ageDays = pending > 1 && !Number.isNaN(billedAt.getTime())
         ? Math.max(0, Math.floor((asOf.getTime() - billedAt.getTime()) / 86400000))
         : 0;

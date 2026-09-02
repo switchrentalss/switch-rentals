@@ -363,7 +363,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(convertedInvoice);
     } catch (error) {
       console.error("Invoice conversion error:", error);
-      res.status(500).json({ message: "Failed to convert invoice" });
+      const message = error instanceof Error ? error.message : "Failed to convert invoice";
+      const early = message.includes("Hire has not ended");
+      res.status(early ? 400 : 500).json({ message });
     }
   });
 

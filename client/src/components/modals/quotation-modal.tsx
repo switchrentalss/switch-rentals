@@ -415,12 +415,18 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-lg">
-                    <span>Total Amount:</span>
+                    <span>Hire / tax amount:</span>
                     <span className="flex items-center">
                       <IndianRupee className="h-4 w-4 mr-1" />
                       {totalAmount.toFixed(2)}
                     </span>
                   </div>
+                  {depositAmount > 0 && (
+                    <div className="flex justify-between font-semibold">
+                      <span>To collect now (hire + deposit)</span>
+                      <span>₹{(totalAmount + depositAmount).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
