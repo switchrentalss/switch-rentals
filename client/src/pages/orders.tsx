@@ -156,7 +156,7 @@ export default function Orders() {
     <>
       <div className="flex flex-col min-h-screen">
         <Header
-          title="Hires"
+          title="Orders"
           subtitle="Book the van, pull by code, mark dispatched, inspect on return."
           onNewOrder={() => setShowOrderModal(true)}
         />

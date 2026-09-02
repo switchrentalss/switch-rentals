@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 const millNav = [
-  { name: "Mill today", href: "/", icon: LayoutDashboard },
-  { name: "Hires", href: "/orders", icon: ClipboardList },
+  { name: "Home", href: "/", icon: LayoutDashboard },
+  { name: "Orders", href: "/orders", icon: ClipboardList },
   { name: "Catalogue", href: "/inventory", icon: Package },
   { name: "Clients", href: "/customers", icon: Users },
   { name: "Invoices", href: "/invoices", icon: FileText },

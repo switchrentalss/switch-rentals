@@ -227,9 +227,9 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header
-        title="This morning at the mill"
-        subtitle={isOwner ? "Dock work plus this month’s bills and collections." : "Dispatch, returns, and stock for the mill desk."}
+        <Header
+          title="Home"
+          subtitle={isOwner ? "Dock work plus this month’s bills and collections." : "Dispatch, returns, and stock for the mill desk."}
         actionLabel="New hire"
         onNewOrder={() => setShowOrderModal(true)}
       />
