@@ -201,6 +201,18 @@ export const capitalEntries = pgTable("capital_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const staffUsers = pgTable("staff_users", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  role: varchar("role", { length: 20 }).notNull(),
+  passwordHash: text("password_hash").notNull(),
+  failedLogins: integer("failed_logins").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const enquiries = pgTable("enquiries", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

@@ -35,6 +35,7 @@ import { formatDate, formatINR, stockPercent, catalogueCode } from "@/lib/format
 import { openWhatsApp } from "@/lib/whatsapp";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { todayIso } from "@shared/hire";
 import type { OrderWithCustomer, InventoryItem, Enquiry } from "@shared/schema";
 
@@ -128,6 +129,7 @@ export default function Dashboard() {
   const [inventorySearch, setInventorySearch] = useState("");
   const [drill, setDrill] = useState<{ title: string; invoices?: FinanceInvoice[]; orders?: OrderWithCustomer[] } | null>(null);
   const { toast } = useToast();
+  const { isOwner } = useAuth();
 
   const { data: orders, isLoading: ordersLoading } = useQuery<OrderWithCustomer[]>({
     queryKey: ["/api/orders"],
@@ -142,7 +144,7 @@ export default function Dashboard() {
     monthly: MonthRow[];
     invoices: FinanceInvoice[];
     pendingByClient: { client: string; pending: number }[];
-  }>({ queryKey: ["/api/finance"] });
+  }>({ queryKey: ["/api/finance"], enabled: isOwner });
   const s = finance?.story;
 
   const { data: leads = [] } = useQuery<Enquiry[]>({
@@ -227,13 +229,13 @@ export default function Dashboard() {
     <div className="flex flex-col min-h-screen">
       <Header
         title="This morning at the mill"
-        subtitle="Dock work for the mill, and this month’s bills and collections for the owner."
+        subtitle={isOwner ? "Dock work plus this month’s bills and collections." : "Dispatch, returns, and stock for the mill desk."}
         actionLabel="New hire"
         onNewOrder={() => setShowOrderModal(true)}
       />
 
       <div className="p-6 space-y-6 flex-1">
-        {(inventory?.length || 0) < 20 && (
+        {(inventory?.length || 0) < 20 && isOwner && (
           <Card className="border-amber-200 bg-amber-50">
             <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm">Load the Switch catalogue codes and the clients from the revenue tracker so the mill can type SRS-023 instead of hunting a dropdown.</p>
@@ -244,10 +246,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricLink href="/orders" title="Out on hire" value={onHire.length} hint="Open hires to mark dispatched or returned." icon={ClipboardList} />
           <MetricLink href="/orders" title="Leaving today" value={dispatchToday.length} hint="Pick list for the van — codes and quantities below." icon={Truck} />
-          <MetricLink href="/financial" title="Still unpaid" value={s ? formatINR(s.stillOwed) : "—"} hint="Owner: who owes rent. Floor: chase these clients." icon={IndianRupee} />
+          {isOwner ? (
+            <MetricLink href="/financial" title="Still unpaid" value={s ? formatINR(s.stillOwed) : "—"} hint="Who still owes hire." icon={IndianRupee} />
+          ) : (
+            <MetricLink href="/orders" title="On the floor" value={onHire.length + returnsDue.length} hint="Live hires plus due-backs." icon={Package} />
+          )}
           <MetricLink href="/orders" title="Due back" value={returnsDue.length} hint="Count, inspect, then add breakage on the GST bill." icon={Undo2} />
         </div>
 
+        {isOwner && (
         <div>
           <div className="flex items-end justify-between gap-3 mb-3">
             <div>
@@ -319,6 +326,7 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4">
           <Card>
@@ -374,6 +382,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {isOwner && (
         <Card>
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
@@ -417,7 +426,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {isOwner && (
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardContent className="p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -439,6 +450,7 @@ export default function Dashboard() {
             </Link>
           </CardContent>
         </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">

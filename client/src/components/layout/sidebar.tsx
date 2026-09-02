@@ -10,8 +10,8 @@ import {
   FileText,
   BookOpen,
 } from "lucide-react";
-import { useWorkMode } from "@/lib/work-mode";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 const millNav = [
   { name: "Mill today", href: "/", icon: LayoutDashboard },
@@ -29,8 +29,8 @@ const ownerNav = [
 
 export function Sidebar() {
   const [location] = useLocation();
-  const { mode, setMode } = useWorkMode();
-  const navigation = mode === "owner" ? [...millNav, ...ownerNav] : millNav;
+  const { user, isOwner, logout } = useAuth();
+  const navigation = isOwner ? [...millNav, ...ownerNav] : millNav;
 
   return (
     <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border fixed h-full left-0 top-0 z-40 flex flex-col">
@@ -65,37 +65,24 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 space-y-3 border-t border-sidebar-border">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-sidebar-accent p-1">
+        <div className="bg-sidebar-accent rounded-xl p-3">
+          <p className="text-sm font-medium text-white truncate">{user?.name || "Staff"}</p>
+          <p className="text-xs text-sidebar-foreground/60 truncate">
+            {isOwner ? "Owner · all mill and books" : "Executive · mill desk only"}
+          </p>
+          <p className="text-[11px] text-sidebar-foreground/50 truncate mt-1">{user?.email}</p>
+          <Link href="/site">
+            <span className="text-xs text-[#c4a574] hover:text-white cursor-pointer">Public website</span>
+          </Link>
           <Button
             type="button"
+            variant="ghost"
             size="sm"
-            variant={mode === "floor" ? "secondary" : "ghost"}
-            className="h-8 text-xs"
-            onClick={() => setMode("floor")}
+            className="mt-2 h-8 w-full text-xs"
+            onClick={() => logout()}
           >
-            Floor
+            Sign out
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mode === "owner" ? "secondary" : "ghost"}
-            className="h-8 text-xs"
-            onClick={() => setMode("owner")}
-          >
-            Owner
-          </Button>
-        </div>
-        <div className="bg-sidebar-accent rounded-xl p-3 flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-sm font-semibold">
-            SC
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{mode === "owner" ? "Samir Chhabria" : "Mill desk"}</p>
-            <p className="text-xs text-sidebar-foreground/60 truncate">{mode === "owner" ? "Partner view" : "Dispatch & returns"}</p>
-            <Link href="/site">
-              <span className="text-xs text-[#c4a574] hover:text-white cursor-pointer">Public website</span>
-            </Link>
-          </div>
         </div>
       </div>
     </aside>
