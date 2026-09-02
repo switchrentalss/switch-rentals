@@ -8,5 +8,6 @@ vite.config.ts.*
 .env.*
 .local/
 .neon
+.railway
 .agents/
 skills-lock.json
