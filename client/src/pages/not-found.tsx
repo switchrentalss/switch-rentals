@@ -11,11 +11,11 @@ export default function NotFound() {
           <h1 className="font-serif text-3xl">Page not found</h1>
           <p className="text-sm text-muted-foreground">That page isn’t on the site or in operations.</p>
           <div className="flex justify-center gap-2">
-            <Link href="/">
+            <Link href="/site">
               <Button className="mt-2">Website</Button>
             </Link>
-            <Link href="/app">
-              <Button variant="outline" className="mt-2">Operations</Button>
+            <Link href="/">
+              <Button variant="outline" className="mt-2">Mill</Button>
             </Link>
           </div>
         </CardContent>

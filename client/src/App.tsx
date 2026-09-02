@@ -25,6 +25,7 @@ function Operations() {
       <Sidebar />
       <main className="flex-1 ml-64 min-w-0">
         <Switch>
+          <Route path="/" component={Dashboard} />
           <Route path="/app" component={Dashboard} />
           <Route path="/orders" component={Orders} />
           <Route path="/inventory" component={Inventory} />
@@ -43,7 +44,7 @@ function Operations() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={HomePage} />
+      <Route path="/site" component={HomePage} />
       <Route path="/collections" component={CollectionsPage} />
       <Route path="/gallery" component={GalleryPage} />
       <Route path="/about" component={AboutPage} />

@@ -14,7 +14,7 @@ import { useWorkMode } from "@/lib/work-mode";
 import { Button } from "@/components/ui/button";
 
 const millNav = [
-  { name: "Mill today", href: "/app", icon: LayoutDashboard },
+  { name: "Mill today", href: "/", icon: LayoutDashboard },
   { name: "Hires", href: "/orders", icon: ClipboardList },
   { name: "Catalogue", href: "/inventory", icon: Package },
   { name: "Clients", href: "/customers", icon: Users },
@@ -42,7 +42,10 @@ export function Sidebar() {
 
       <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = item.href === "/app" ? location === "/app" : location.startsWith(item.href);
+          const isActive =
+            item.href === "/"
+              ? location === "/" || location === "/app"
+              : location.startsWith(item.href);
           return (
             <Link key={item.name} href={item.href}>
               <div
@@ -89,7 +92,7 @@ export function Sidebar() {
           <div className="min-w-0">
             <p className="text-sm font-medium text-white truncate">{mode === "owner" ? "Samir Chhabria" : "Mill desk"}</p>
             <p className="text-xs text-sidebar-foreground/60 truncate">{mode === "owner" ? "Partner view" : "Dispatch & returns"}</p>
-            <Link href="/">
+            <Link href="/site">
               <span className="text-xs text-[#c4a574] hover:text-white cursor-pointer">Public website</span>
             </Link>
           </div>
