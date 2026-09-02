@@ -6,6 +6,12 @@ import {
   invoices,
   invoiceItems,
   inventoryReturns,
+  enquiries,
+  payments,
+  expenses,
+  cashPositions,
+  financeSettings,
+  capitalEntries,
   type Customer, 
   type InsertCustomer,
   type InventoryItem,
@@ -22,10 +28,25 @@ import {
   type InsertInvoiceItem,
   type InvoiceWithCustomer,
   type InventoryReturn,
-  type InsertInventoryReturn
+  type InsertInventoryReturn,
+  type Enquiry,
+  type InsertEnquiry,
+  type Payment,
+  type InsertPayment,
+  type Expense,
+  type InsertExpense,
+  type CashPosition,
+  type InsertCashPosition,
+  type FinanceSettings,
+  type InsertFinanceSettings,
+  type CapitalEntry,
+  type InsertCapitalEntry,
 } from "@shared/schema";
+import { isInvoicePaymentKind, lateReturnCharge, toteCharge } from "@shared/hire";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 export interface IStorage {
   // Customers
@@ -42,6 +63,7 @@ export interface IStorage {
   createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(id: number, item: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined>;
   deleteInventoryItem(id: number): Promise<boolean>;
+  bootstrapOps(): Promise<{ itemsAdded: number; itemsUpdated: number; clientsAdded: number; items: number; clients: number }>;
 
   // Orders
   getOrders(): Promise<OrderWithCustomer[]>;
@@ -76,6 +98,11 @@ export interface IStorage {
   getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]>;
   createInventoryReturn(returnData: InsertInventoryReturn): Promise<InventoryReturn>;
   updateInventoryReturn(id: number, returnData: Partial<InsertInventoryReturn>): Promise<InventoryReturn | undefined>;
+
+  getAvailability(start: string, end: string): Promise<{ itemId: number; name: string; totalStock: number; reserved: number; available: number }[]>;
+  getEnquiries(): Promise<Enquiry[]>;
+  createEnquiry(enquiry: InsertEnquiry): Promise<Enquiry>;
+  updateEnquiryStatus(id: number, status: string): Promise<Enquiry | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -156,6 +183,55 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async bootstrapOps() {
+    const catalogue = JSON.parse(readFileSync(join(process.cwd(), "server/data/catalogue.json"), "utf8")) as InsertInventoryItem[];
+    const liveClients = JSON.parse(readFileSync(join(process.cwd(), "server/data/live-clients.json"), "utf8")) as InsertCustomer[];
+    let itemsAdded = 0;
+    let itemsUpdated = 0;
+    for (const row of catalogue) {
+      const [hit] = row.sku
+        ? await db.select().from(inventoryItems).where(eq(inventoryItems.sku, row.sku))
+        : [];
+      if (hit) {
+        await db
+          .update(inventoryItems)
+          .set({
+            name: row.name,
+            category: row.category,
+            itemCode: row.itemCode || row.sku,
+            ratePerDay: row.ratePerDay,
+            replacementCost: row.replacementCost,
+            description: row.description,
+            location: row.location || "Gupta Mills",
+            updatedAt: new Date(),
+          })
+          .where(eq(inventoryItems.id, hit.id));
+        itemsUpdated += 1;
+        continue;
+      }
+      await this.createInventoryItem(row);
+      itemsAdded += 1;
+    }
+    const existing = await this.getCustomers();
+    const seen = new Set(existing.map((c) => `${(c.company || c.name).toLowerCase()}|${c.email.toLowerCase()}`));
+    let clientsAdded = 0;
+    for (const client of liveClients) {
+      const nameKey = (client.company || client.name).toLowerCase();
+      const key = `${nameKey}|${client.email.toLowerCase()}`;
+      if ([...existing].some((c) => (c.company || c.name).toLowerCase() === nameKey) || seen.has(key)) continue;
+      await this.createCustomer(client);
+      seen.add(key);
+      clientsAdded += 1;
+    }
+    return {
+      itemsAdded,
+      itemsUpdated,
+      clientsAdded,
+      items: (await this.getInventoryItems()).length,
+      clients: (await this.getCustomers()).length,
+    };
+  }
+
   // Order methods
   async getOrders(): Promise<OrderWithCustomer[]> {
     const ordersWithCustomers = await db
@@ -182,7 +258,8 @@ export class DatabaseStorage implements IStorage {
         }
       })
       .from(orders)
-      .innerJoin(customers, eq(orders.customerId, customers.id));
+      .innerJoin(customers, eq(orders.customerId, customers.id))
+      .orderBy(sql`${orders.createdAt} desc`);
 
     const ordersWithItems = await Promise.all(
       ordersWithCustomers.map(async (order) => {
@@ -235,6 +312,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<OrderWithCustomer> {
+    const availability = await this.getAvailability(order.startDate, order.endDate);
+    for (const item of items) {
+      const slot = availability.find((row) => row.itemId === item.itemId);
+      if (!slot || slot.available < item.quantity) {
+        throw new Error(
+          `Those dates are already booked for ${slot?.name || "an item"}. Free: ${slot?.available ?? 0}, requested: ${item.quantity}.`,
+        );
+      }
+    }
     // Generate order number
     const orderCount = await db.select({ count: sql<number>`count(*)` }).from(orders);
     const orderNumber = `ORD-${String(orderCount[0].count + 1).padStart(3, '0')}`;
@@ -250,9 +336,9 @@ export class DatabaseStorage implements IStorage {
       totalAmount: order.totalAmount,
     }).returning();
     
-    // Insert order items
     for (const item of items) {
       await db.insert(orderItems).values({ ...item, orderId: newOrder.id });
+      await this.updateInventoryStock(item.itemId, -item.quantity);
     }
 
     const result = await this.getOrder(newOrder.id);
@@ -271,7 +357,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOrder(id: number): Promise<boolean> {
-    // Delete order items first
+    const items = await this.getOrderItems(id);
+    for (const item of items) {
+      await this.updateInventoryStock(item.itemId, item.quantity);
+    }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
     const result = await db.delete(orders).where(eq(orders.id, id));
     return (result.rowCount ?? 0) > 0;
@@ -352,7 +441,7 @@ export class DatabaseStorage implements IStorage {
     const [overdueItemsResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(orders)
-      .where(sql`${orders.endDate} < current_date AND ${orders.status} = 'active'`);
+      .where(sql`${orders.endDate} < current_date AND ${orders.status} not in ('returned', 'cancelled')`);
 
     // Get pending quotes count from invoices table
     const [pendingQuotesResult] = await db
@@ -369,12 +458,12 @@ export class DatabaseStorage implements IStorage {
     const damageReportsCount = damageReportsResult.count || 0;
 
     return {
-      activeOrders: activeOrdersResult.count || 0,
-      itemsOut: totalItemsOut.total || 0,
+      activeOrders: Number(activeOrdersResult.count || 0),
+      itemsOut: Number(totalItemsOut.total || 0),
       monthlyRevenue: monthlyRevenueResult.revenue || "0.00",
-      overdueItems: overdueItemsResult.count || 0,
-      pendingQuotes,
-      damageReports: damageReportsCount,
+      overdueItems: Number(overdueItemsResult.count || 0),
+      pendingQuotes: Number(pendingQuotes || 0),
+      damageReports: Number(damageReportsCount || 0),
     };
   }
 
@@ -382,7 +471,8 @@ export class DatabaseStorage implements IStorage {
     const [updatedItem] = await db
       .update(inventoryItems)
       .set({
-        availableStock: sql`${inventoryItems.availableStock} + ${quantityChange}`
+          availableStock: sql`${inventoryItems.availableStock} + ${quantityChange}`,
+        outStock: sql`GREATEST(${inventoryItems.outStock} - ${quantityChange}, 0)`,
       })
       .where(eq(inventoryItems.id, itemId))
       .returning();
@@ -491,12 +581,18 @@ export class DatabaseStorage implements IStorage {
         .where(eq(invoices.invoiceType, invoice.invoiceType))
         .execute();
       
-      const invoiceNumber = `${typePrefix}-${String(count[0].count + 1).padStart(4, '0')}`;
+      const requestedNumber = (invoice as InsertInvoice & { invoiceNumber?: string }).invoiceNumber;
+      const invoiceNumber =
+        requestedNumber && requestedNumber.trim()
+          ? requestedNumber.trim()
+          : `${typePrefix}-${String(count[0].count + 1).padStart(4, "0")}`;
 
+      const payload = { ...(invoice as Record<string, unknown>) };
+      delete payload.invoiceNumber;
       const [createdInvoice] = await db
         .insert(invoices)
         .values({
-          ...invoice,
+          ...(payload as InsertInvoice),
           invoiceNumber,
         })
         .returning();
@@ -532,6 +628,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvoice(id: number): Promise<boolean> {
     try {
+      await db.delete(payments).where(eq(payments.invoiceId, id)).execute();
       await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id)).execute();
       await db.delete(invoices).where(eq(invoices.id, id)).execute();
       return true;
@@ -563,6 +660,13 @@ export class DatabaseStorage implements IStorage {
         gstAmount: quote.gstAmount,
         totalAmount: quote.totalAmount,
         depositAmount: quote.depositAmount || "0.00",
+        rentAmount: quote.rentAmount,
+        packingAmount: quote.packingAmount,
+        transportAmount: quote.transportAmount,
+        mistAmount: quote.mistAmount,
+        discountAmount: quote.discountAmount,
+        breakageAmount: quote.breakageAmount,
+        returnDate: quote.returnDate,
         sampleType: quote.sampleType || "none",
         status: invoiceType === 'quotation' ? 'draft' : 'sent',
         terms: quote.terms,
@@ -614,84 +718,72 @@ export class DatabaseStorage implements IStorage {
   }
 
   async processReturnsAndCreateFinalInvoice(invoiceId: number, returns: any[]): Promise<InvoiceWithCustomer> {
-    try {
-      // Get the original GST invoice
-      const gstInvoice = await this.getInvoice(invoiceId);
-      if (!gstInvoice) {
-        throw new Error("GST Invoice not found");
+    const gstInvoice = await this.getInvoice(invoiceId);
+    if (!gstInvoice) throw new Error("GST Invoice not found");
+
+    let breakage = 0;
+    for (const returnItem of returns) {
+      const penalty = parseFloat(returnItem.penaltyAmount || "0") || 0;
+      if (returnItem.conditionStatus === "damaged" || returnItem.conditionStatus === "missing") {
+        breakage += penalty;
       }
-
-      // Calculate penalty amounts for damaged/missing items
-      let totalPenaltyAmount = 0;
-      const penaltyItems: any[] = [];
-
-      for (const returnItem of returns) {
-        if (returnItem.conditionStatus === 'damaged' || returnItem.conditionStatus === 'missing') {
-          const penaltyAmount = parseFloat(returnItem.penaltyAmount || '0');
-          totalPenaltyAmount += penaltyAmount;
-          
-          if (penaltyAmount > 0) {
-            penaltyItems.push({
-              itemId: returnItem.itemId,
-              quantity: returnItem.quantityDamaged || returnItem.quantityMissing || 1,
-              ratePerDay: penaltyAmount.toFixed(2),
-              days: 1,
-              lineTotal: penaltyAmount.toFixed(2)
-            });
-          }
+      await this.createInventoryReturn({
+        orderId: gstInvoice.orderId || undefined,
+        invoiceId: gstInvoice.id,
+        itemId: returnItem.itemId,
+        quantityShipped: returnItem.quantityShipped || returnItem.quantityReturned || 0,
+        quantityReturned: returnItem.quantityReturned,
+        conditionStatus: returnItem.conditionStatus,
+        damageNotes: returnItem.damageNotes,
+        penaltyAmount: String(penalty),
+        checkedBy: returnItem.checkedBy || "Floor",
+      });
+      const restored = Number(returnItem.quantityReturned || 0);
+      if (restored > 0) await this.updateInventoryStock(returnItem.itemId, restored);
+      const shipped = Number(returnItem.quantityShipped || 0);
+      const missing = Math.max(0, shipped - restored);
+      if (returnItem.conditionStatus === "missing" && missing > 0) {
+        const item = await this.getInventoryItem(returnItem.itemId);
+        if (item) {
+          await db
+            .update(inventoryItems)
+            .set({ totalStock: Math.max(0, item.totalStock - missing), updatedAt: new Date() })
+            .where(eq(inventoryItems.id, item.id));
         }
-        
-        // Create inventory return record
-        await this.createInventoryReturn({
-          orderId: gstInvoice.orderId || 0,
-          itemId: returnItem.itemId,
-          quantityShipped: returnItem.quantityShipped,
-          quantityReturned: returnItem.quantityReturned,
-          conditionStatus: returnItem.conditionStatus,
-          damageNotes: returnItem.damageNotes,
-          penaltyAmount: returnItem.penaltyAmount || '0',
-          checkedBy: returnItem.checkedBy || 'System',
-          // returnDate field removed as it doesn't exist in schema
-        });
       }
-
-      // Create final invoice with penalty charges
-      const finalInvoiceData: InsertInvoice = {
-        customerId: gstInvoice.customerId,
-        quoteId: gstInvoice.quoteId,
-        invoiceType: 'final_invoice',
-        dispatchDate: gstInvoice.dispatchDate,
-        startDate: gstInvoice.startDate,
-        endDate: gstInvoice.endDate,
-        eventDetails: `${gstInvoice.eventDetails} - Final Settlement with Return Processing`,
-        subtotal: totalPenaltyAmount.toFixed(2),
-        gstRate: '18',
-        gstAmount: (totalPenaltyAmount * 0.18).toFixed(2),
-        totalAmount: (totalPenaltyAmount * 1.18).toFixed(2),
-        status: 'sent',
-        terms: 'Final settlement invoice. Penalties applied for damaged/missing items as per rental agreement.',
-        dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      };
-
-      const finalInvoiceItems = penaltyItems.map(item => ({
-        itemId: item.itemId,
-        quantity: item.quantity,
-        ratePerDay: item.ratePerDay,
-        days: item.days,
-        lineTotal: item.lineTotal,
-        invoiceId: 0 // Will be set by createInvoice
-      }));
-
-      const finalInvoice = await this.createInvoice(finalInvoiceData, finalInvoiceItems);
-
-      // Update GST invoice status to completed
-      await this.updateInvoice(invoiceId, { status: 'completed' });
-
-      return finalInvoice;
-    } catch (error) {
-      console.error('Error processing returns and creating final invoice:', error);
-      throw error;
     }
+
+    const rent = parseFloat(gstInvoice.rentAmount || "0") || parseFloat(gstInvoice.subtotal || "0");
+    const returnedOn = String(returns[0]?.actualReturnDate || new Date().toISOString().slice(0, 10));
+    const lateDays = Number(returns[0]?.lateDays);
+    const late =
+      Number.isFinite(lateDays) && lateDays > 0
+        ? { extraDays: lateDays, extra: rent * 0.25 + rent * Math.max(0, lateDays - 1) }
+        : lateReturnCharge(rent, gstInvoice.endDate, returnedOn);
+    const totes = toteCharge(Number(returns[0]?.toteLost || 0));
+    const packing = parseFloat(gstInvoice.packingAmount || "0") || 0;
+    const transport = parseFloat(gstInvoice.transportAmount || "0") || 0;
+    const mist = (parseFloat(gstInvoice.mistAmount || "0") || 0) + late.extra + totes;
+    const discount = parseFloat(gstInvoice.discountAmount || "0") || 0;
+    const breakageTotal = (parseFloat(gstInvoice.breakageAmount || "0") || 0) + breakage;
+    const net = rent + packing + transport + mist - discount + breakageTotal;
+    const gst = Math.round(net * 0.18 * 100) / 100;
+    await this.updateInvoice(invoiceId, {
+      mistAmount: String(mist),
+      breakageAmount: String(breakageTotal),
+      subtotal: String(net),
+      gstAmount: String(gst),
+      totalAmount: String(net + gst),
+      returnDate: returnedOn,
+      notes: [gstInvoice.notes, late.extraDays ? `Late ${late.extraDays}d` : "", totes ? `Tote ${totes}` : ""]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 500),
+    });
+    if (gstInvoice.orderId) await this.updateOrderStatus(gstInvoice.orderId, "returned");
+    await this.syncInvoicePaidStatus(invoiceId);
+    const updated = await this.getInvoice(invoiceId);
+    return updated!;
   }
 
   async getInventoryReturns(orderId?: number): Promise<(InventoryReturn & { item: InventoryItem })[]> {
@@ -748,6 +840,196 @@ export class DatabaseStorage implements IStorage {
       console.error('Error updating inventory return:', error);
       return undefined;
     }
+  }
+
+  async getAvailability(start: string, end: string) {
+    const items = await this.getInventoryItems();
+    const reservedRows = await db
+      .select({
+        itemId: orderItems.itemId,
+        qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .where(
+        and(
+          sql`${orders.status} not in ('returned', 'cancelled')`,
+          lte(orders.startDate, end),
+          gte(orders.endDate, start),
+        ),
+      )
+      .groupBy(orderItems.itemId);
+
+    const reservedMap = new Map(reservedRows.map((row) => [row.itemId, Number(row.qty)]));
+    return items.map((item) => {
+      const reserved = reservedMap.get(item.id) || 0;
+      return {
+        itemId: item.id,
+        name: item.name,
+        totalStock: item.totalStock,
+        reserved,
+        available: Math.max(0, item.totalStock - reserved),
+      };
+    });
+  }
+
+  async getEnquiries(): Promise<Enquiry[]> {
+    return db.select().from(enquiries).orderBy(desc(enquiries.createdAt));
+  }
+
+  async createEnquiry(enquiry: InsertEnquiry): Promise<Enquiry> {
+    const [created] = await db.insert(enquiries).values(enquiry).returning();
+    return created;
+  }
+
+  async updateEnquiryStatus(id: number, status: string): Promise<Enquiry | undefined> {
+    const [updated] = await db
+      .update(enquiries)
+      .set({ status })
+      .where(eq(enquiries.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPayments(invoiceId?: number): Promise<(Payment & { invoiceNumber: string; customerName: string })[]> {
+    const rows = await db
+      .select({
+        payment: payments,
+        invoiceNumber: invoices.invoiceNumber,
+        customerName: customers.name,
+      })
+      .from(payments)
+      .innerJoin(invoices, eq(payments.invoiceId, invoices.id))
+      .innerJoin(customers, eq(invoices.customerId, customers.id))
+      .where(invoiceId ? eq(payments.invoiceId, invoiceId) : sql`true`)
+      .orderBy(desc(payments.paidOn));
+    return rows.map((r) => ({ ...r.payment, invoiceNumber: r.invoiceNumber, customerName: r.customerName }));
+  }
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    const [row] = await db.insert(payments).values({ ...data, kind: data.kind || "invoice" }).returning();
+    await this.syncInvoicePaidStatus(row.invoiceId);
+    return row;
+  }
+
+  async syncInvoicePaidStatus(invoiceId: number): Promise<void> {
+    const invoice = await this.getInvoice(invoiceId);
+    if (!invoice || invoice.status === "void" || invoice.status === "converted") return;
+    const rows = await db.select().from(payments).where(eq(payments.invoiceId, invoiceId));
+    const toward = rows
+      .filter((p) => isInvoicePaymentKind(p.kind))
+      .reduce((s, p) => s + parseFloat(p.amount), 0);
+    const total = parseFloat(invoice.totalAmount);
+    let status = invoice.status || "sent";
+    if (toward >= total - 1) status = "paid";
+    else if (toward >= 1) status = "partial";
+    else if (status === "paid" || status === "partial") status = "sent";
+    if (status !== invoice.status) await this.updateInvoice(invoiceId, { status });
+  }
+
+  async voidInvoice(id: number): Promise<Invoice | undefined> {
+    return this.updateInvoice(id, { status: "void" });
+  }
+
+  async createBillFromOrder(orderId: number): Promise<InvoiceWithCustomer> {
+    const order = await this.getOrder(orderId);
+    if (!order) throw new Error("Order not found");
+    const existing = await db.select().from(invoices).where(eq(invoices.orderId, orderId));
+    const live = existing.find((i) => i.invoiceType === "gst_invoice" && i.status !== "void");
+    if (live) throw new Error(`GST ${live.invoiceNumber} already exists for this order`);
+    const rent = parseFloat(order.totalAmount);
+    const packing = Math.round(rent * 0.03 * 100) / 100;
+    const net = rent + packing;
+    const gst = Math.round(net * 0.18 * 100) / 100;
+    const start = new Date(order.startDate);
+    const end = new Date(order.endDate);
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    return this.createInvoice(
+      {
+        customerId: order.customerId,
+        orderId: order.id,
+        invoiceType: "gst_invoice",
+        dispatchDate: order.startDate,
+        startDate: order.startDate,
+        endDate: order.endDate,
+        returnDate: order.endDate,
+        eventDetails: order.eventDetails || order.orderNumber,
+        subtotal: String(net),
+        gstRate: "18.00",
+        gstAmount: String(gst),
+        totalAmount: String(net + gst),
+        rentAmount: String(rent),
+        packingAmount: String(packing),
+        status: "sent",
+      } as InsertInvoice,
+      order.items.map((item) => ({
+        invoiceId: 0,
+        itemId: item.itemId,
+        quantity: item.quantity,
+        ratePerDay: item.ratePerDay,
+        days,
+        lineTotal: item.totalAmount,
+      })),
+    );
+  }
+
+  async getExpenses(): Promise<Expense[]> {
+    return db.select().from(expenses).orderBy(desc(expenses.spentOn));
+  }
+
+  async createExpense(data: InsertExpense): Promise<Expense> {
+    const [row] = await db.insert(expenses).values(data).returning();
+    return row;
+  }
+
+  async getCashPositions(): Promise<CashPosition[]> {
+    return db.select().from(cashPositions).orderBy(desc(cashPositions.asOf));
+  }
+
+  async upsertCashPosition(data: InsertCashPosition): Promise<CashPosition> {
+    const existing = await db.select().from(cashPositions).where(eq(cashPositions.asOf, data.asOf));
+    if (existing[0]) {
+      const [row] = await db
+        .update(cashPositions)
+        .set({ bankAmount: data.bankAmount, cashAmount: data.cashAmount, notes: data.notes })
+        .where(eq(cashPositions.id, existing[0].id))
+        .returning();
+      return row;
+    }
+    const [row] = await db.insert(cashPositions).values(data).returning();
+    return row;
+  }
+
+  async getFinanceSettings(): Promise<FinanceSettings> {
+    const rows = await db.select().from(financeSettings).limit(1);
+    if (rows[0]) return rows[0];
+    const [created] = await db.insert(financeSettings).values({}).returning();
+    return created;
+  }
+
+  async upsertFinanceSettings(data: Partial<InsertFinanceSettings>): Promise<FinanceSettings> {
+    const current = await this.getFinanceSettings();
+    const [row] = await db
+      .update(financeSettings)
+      .set({
+        annualBudgetNet: data.annualBudgetNet ?? current.annualBudgetNet,
+        samirName: data.samirName ?? current.samirName,
+        karanName: data.karanName ?? current.karanName,
+        samirShare: data.samirShare ?? current.samirShare,
+        karanShare: data.karanShare ?? current.karanShare,
+      })
+      .where(eq(financeSettings.id, current.id))
+      .returning();
+    return row;
+  }
+
+  async getCapitalEntries(): Promise<CapitalEntry[]> {
+    return db.select().from(capitalEntries).orderBy(desc(capitalEntries.occurredOn));
+  }
+
+  async createCapitalEntry(data: InsertCapitalEntry): Promise<CapitalEntry> {
+    const [row] = await db.insert(capitalEntries).values(data).returning();
+    return row;
   }
 }
 

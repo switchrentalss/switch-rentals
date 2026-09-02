@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Search, Filter, Plus, Mail, Phone, Edit, MoreHorizontal, Trash2, Eye, FileText, Calendar, DollarSign, TrendingUp, Package } from "lucide-react";
+import { Users, Search, Plus, Mail, Phone, Edit, MoreHorizontal, Trash2, Eye, FileText, Calendar, DollarSign, TrendingUp, Package } from "lucide-react";
 import type { Customer, OrderWithCustomer } from "@shared/schema";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +75,7 @@ export default function Customers() {
   const filteredCustomers = customers?.filter(customer => 
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    customer.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.company?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
@@ -115,10 +116,6 @@ export default function Customers() {
                     className="pl-10"
                   />
                 </div>
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
               </div>
               <Button onClick={() => setShowCustomerModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />

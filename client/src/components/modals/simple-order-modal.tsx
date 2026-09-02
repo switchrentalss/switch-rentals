@@ -6,18 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { CataloguePicker, type HireLine } from "@/components/catalogue-picker";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Trash2, User, Calendar, Package, Search } from "lucide-react";
+import { User, Calendar } from "lucide-react";
 import type { Customer, InventoryItem } from "@shared/schema";
+import { formatINR, rentalDays } from "@/lib/format";
+import { billing, packingOnRent } from "@/lib/billing";
 
-interface SelectedItem {
-  itemId: number;
-  itemName: string;
-  quantity: number;
-  ratePerDay: number;
-  totalAmount: number;
-}
+interface SelectedItem extends HireLine {}
 
 interface SimpleOrderModalProps {
   open: boolean;
@@ -34,8 +31,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
   const [endDate, setEndDate] = useState("");
   const [eventDetails, setEventDetails] = useState("");
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [alsoQuote, setAlsoQuote] = useState(true);
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -45,17 +41,27 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
     queryKey: ["/api/inventory"],
   });
 
-  // Filter inventory based on search and category
-  const filteredInventory = inventory?.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === "" || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  }) || [];
+  const datesReady = Boolean(startDate && endDate);
+  const { data: availability, isFetching: availabilityLoading } = useQuery<{
+    itemId: number;
+    available: number;
+    reserved: number;
+    totalStock: number;
+  }[]>({
+    queryKey: ["/api/inventory/availability", startDate, endDate],
+    enabled: datesReady,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/inventory/availability?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
+      );
+      if (!res.ok) throw new Error("Could not check availability");
+      return res.json();
+    },
+  });
 
   const createOrderMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/orders", {
+      const res = await apiRequest("POST", "/api/orders", {
         order: {
           customerId: data.customerId,
           eventDate: data.dispatchDate,
@@ -71,28 +77,83 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
           totalAmount: item.totalAmount.toString(),
         })),
       });
+      const order = await res.json();
+      if (data.alsoQuote) {
+        const packing = packingOnRent(data.totalAmount);
+        const net = data.totalAmount + packing;
+        const gst = Math.round(net * billing.gstRate * 100) / 100;
+        const daysCount = rentalDays(data.startDate, data.endDate);
+        await apiRequest("POST", "/api/invoices", {
+          invoice: {
+            customerId: data.customerId,
+            orderId: order.id,
+            invoiceType: "quotation",
+            dispatchDate: data.dispatchDate,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            eventDetails: data.eventDetails,
+            subtotal: String(net),
+            rentAmount: String(data.totalAmount),
+            packingAmount: String(packing),
+            gstRate: "18.00",
+            gstAmount: String(gst),
+            totalAmount: String(net + gst),
+            status: "draft",
+          },
+          items: data.items.map((item: SelectedItem) => ({
+            itemId: item.itemId,
+            quantity: item.quantity,
+            ratePerDay: item.ratePerDay.toString(),
+            days: daysCount,
+            lineTotal: item.totalAmount.toString(),
+          })),
+        });
+      }
+      return order;
     },
     onSuccess: () => {
       toast({
-        title: "✅ Order Created",
-        description: "New order has been successfully created",
+        title: "Hire booked",
+        description: alsoQuote
+          ? "Stock is reserved. A quotation is ready under Invoices — send it on WhatsApp from there."
+          : "Stock is reserved for these dates.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       handleReset();
       onOpenChange(false);
     },
     onError: (error: any) => {
+      let description = error.message || "Failed to create order";
+      const jsonPart = String(error.message || "").replace(/^\d+:\s*/, "");
+      try {
+        const parsed = JSON.parse(jsonPart);
+        if (parsed.message) description = parsed.message;
+      } catch {
+        // keep raw message
+      }
       toast({
-        title: "❌ Error",
-        description: error.message || "Failed to create order",
+        title: "Could not create order",
+        description,
         variant: "destructive",
       });
     },
   });
 
 
+
+  const days = rentalDays(startDate, endDate);
+
+  useEffect(() => {
+    setSelectedItems((current) =>
+      current.map((item) => ({
+        ...item,
+        totalAmount: item.quantity * item.ratePerDay * days,
+      }))
+    );
+  }, [days]);
 
   const totalAmount = selectedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
@@ -122,6 +183,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
       eventDetails,
       items: orderItems,
       totalAmount,
+      alsoQuote,
     });
   };
 
@@ -132,15 +194,14 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
     setEndDate("");
     setEventDetails("");
     setSelectedItems([]);
-    setSearchTerm("");
-    setSelectedCategory("");
+    setAlsoQuote(true);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-center">📋 Create New Order</DialogTitle>
+          <DialogTitle className="font-serif text-2xl">New hire</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -149,9 +210,9 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <User className="h-5 w-5 text-blue-600" />
-                <Label className="text-lg font-semibold">Select Customer</Label>
+                <Label className="text-lg font-semibold">Who is hiring?</Label>
               </div>
-              <Select value={customerId.toString()} onValueChange={(value) => setCustomerId(parseInt(value))}>
+              <Select value={customerId ? customerId.toString() : undefined} onValueChange={(value) => setCustomerId(parseInt(value))}>
                 <SelectTrigger className="h-12 text-lg">
                   <SelectValue placeholder="Choose a customer..." />
                 </SelectTrigger>
@@ -159,8 +220,8 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                   {customers?.map((customer) => (
                     <SelectItem key={customer.id} value={customer.id.toString()}>
                       <div className="py-2">
-                        <div className="font-semibold">{customer.name}</div>
-                        <div className="text-sm text-gray-600">{customer.phone}</div>
+                        <div className="font-semibold">{customer.company || customer.name}</div>
+                        <div className="text-sm text-gray-600">{customer.name !== customer.company ? customer.name : customer.phone}</div>
                       </div>
                     </SelectItem>
                   ))}
@@ -174,11 +235,11 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Calendar className="h-5 w-5 text-green-600" />
-                <Label className="text-lg font-semibold">Event Dates</Label>
+                <Label className="text-lg font-semibold">When does it move?</Label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-base font-medium">Dispatch Date</Label>
+                  <Label className="text-base font-medium">Van leaves (dispatch)</Label>
                   <Input
                     type="date"
                     value={dispatchDate}
@@ -187,7 +248,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                   />
                 </div>
                 <div>
-                  <Label className="text-base font-medium">Start Date</Label>
+                  <Label className="text-base font-medium">Billed from</Label>
                   <Input
                     type="date"
                     value={startDate}
@@ -196,7 +257,7 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                   />
                 </div>
                 <div>
-                  <Label className="text-base font-medium">End Date</Label>
+                  <Label className="text-base font-medium">Due back / billed until</Label>
                   <Input
                     type="date"
                     value={endDate}
@@ -205,6 +266,9 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
                   />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Availability is based on overlapping bookings for these dates, not only warehouse stock.
+              </p>
             </CardContent>
           </Card>
 
@@ -221,230 +285,40 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
             </CardContent>
           </Card>
 
-          {/* Search and Select Items */}
           <Card>
             <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="h-6 w-6 text-purple-600" />
-                <Label className="text-2xl font-bold">Select Items</Label>
-              </div>
-              
-              {/* Search Bar */}
-              <div className="relative mb-6">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  placeholder="Search items..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 rounded-lg"
-                />
-              </div>
-
-              {/* Category Filter */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                {Array.from(new Set(inventory?.map(item => item.category) || [])).map((category) => (
-                  <Button
-                    key={category}
-                    variant={selectedCategory === category ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedCategory(selectedCategory === category ? "" : category)}
-                    className="rounded-full px-4 py-2"
-                  >
-                    {category}
-                  </Button>
-                ))}
-                {selectedCategory && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedCategory("")}
-                    className="rounded-full px-4 py-2 text-gray-500"
-                  >
-                    Clear Filter
-                  </Button>
-                )}
-              </div>
-
-              {/* Selected Items Cart Style */}
-              {selectedItems.length > 0 && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-bold text-lg mb-4 text-gray-800">Selected Items</h3>
-                  <div className="space-y-3">
-                    {selectedItems.map((selectedItem) => {
-                      const item = inventory?.find(i => i.id === selectedItem.itemId);
-                      if (!item) return null;
-                      
-                      return (
-                        <div key={selectedItem.itemId} className="flex items-center justify-between p-4 bg-white rounded-lg border">
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                              <Package className="w-6 h-6 text-gray-600" />
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                              <p className="text-sm text-gray-600">₹{item.ratePerDay}/day</p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-4">
-                            {/* Quantity Controls */}
-                            <div className="flex items-center gap-1 border rounded-lg">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const newQty = Math.max(0, selectedItem.quantity - 1);
-                                  if (newQty === 0) {
-                                    setSelectedItems(selectedItems.filter(si => si.itemId !== selectedItem.itemId));
-                                  } else {
-                                    const updatedItems = [...selectedItems];
-                                    const itemIndex = updatedItems.findIndex(si => si.itemId === selectedItem.itemId);
-                                    updatedItems[itemIndex].quantity = newQty;
-                                    updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
-                                    setSelectedItems(updatedItems);
-                                  }
-                                }}
-                                className="w-10 h-10 p-0 hover:bg-gray-100"
-                                disabled={selectedItem.quantity <= 1}
-                              >
-                                -
-                              </Button>
-                              
-                              <span className="w-12 text-center font-semibold text-lg">
-                                {selectedItem.quantity}
-                              </span>
-                              
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const newQty = selectedItem.quantity + 1;
-                                  const updatedItems = [...selectedItems];
-                                  const itemIndex = updatedItems.findIndex(si => si.itemId === selectedItem.itemId);
-                                  updatedItems[itemIndex].quantity = newQty;
-                                  updatedItems[itemIndex].totalAmount = newQty * parseFloat(item.ratePerDay);
-                                  setSelectedItems(updatedItems);
-                                }}
-                                className="w-10 h-10 p-0 hover:bg-gray-100"
-                              >
-                                +
-                              </Button>
-                            </div>
-                            
-                            {/* Price */}
-                            <div className="text-right min-w-20">
-                              <div className="font-bold text-lg">₹{selectedItem.totalAmount.toFixed(2)}</div>
-                            </div>
-                            
-                            {/* Remove Button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedItems(selectedItems.filter(si => si.itemId !== selectedItem.itemId));
-                              }}
-                              className="w-10 h-10 p-0 text-red-500 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Available Items */}
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                <h3 className="font-bold text-lg text-gray-800 sticky top-0 bg-white py-2">Available Items</h3>
-                {filteredInventory?.map((item) => {
-                  const isSelected = selectedItems.some(si => si.itemId === item.id);
-                  
-                  return (
-                    <div 
-                      key={item.id} 
-                      className={`flex items-center justify-between p-4 border rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-50' 
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                      onClick={() => {
-                        if (!isSelected) {
-                          const newItem: SelectedItem = {
-                            itemId: item.id,
-                            itemName: item.name,
-                            quantity: 1,
-                            ratePerDay: parseFloat(item.ratePerDay),
-                            totalAmount: parseFloat(item.ratePerDay),
-                          };
-                          setSelectedItems([...selectedItems, newItem]);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                          <Package className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                          <p className="text-sm text-gray-600">{item.description}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="font-bold text-green-600">₹{item.ratePerDay}</span>
-                            <span className="text-sm text-gray-500">/day</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {isSelected ? (
-                        <div className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
-                          ✓
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newItem: SelectedItem = {
-                              itemId: item.id,
-                              itemName: item.name,
-                              quantity: 1,
-                              ratePerDay: parseFloat(item.ratePerDay),
-                              totalAmount: parseFloat(item.ratePerDay),
-                            };
-                            setSelectedItems([...selectedItems, newItem]);
-                          }}
-                          className="px-4 py-2"
-                        >
-                          Add
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {filteredInventory?.length === 0 && (
-                <div className="text-center py-8">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No items found matching your search</p>
-                </div>
-              )}
+              <CataloguePicker
+                inventory={inventory}
+                days={days}
+                selectedItems={selectedItems}
+                setSelectedItems={setSelectedItems}
+                datesReady={datesReady}
+                availability={availability}
+                availabilityLoading={availabilityLoading}
+                requireDates
+              />
             </CardContent>
           </Card>
 
-          {/* Order Summary */}
           {selectedItems.length > 0 && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-lg font-semibold">Order Total</span>
-                    <div className="text-sm text-gray-600">{selectedItems.length} items selected</div>
-                  </div>
-                  <span className="text-3xl font-bold text-blue-600">₹{totalAmount.toFixed(2)}</span>
+            <Card className="border-primary/20 bg-primary/[0.04]">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Rent</span>
+                  <span className="tabular-nums">{formatINR(totalAmount)}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span>Packing 3%</span>
+                  <span className="tabular-nums">{formatINR(packingOnRent(totalAmount))}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Before GST</span>
+                  <span className="tabular-nums">{formatINR(totalAmount + packingOnRent(totalAmount))}</span>
+                </div>
+                <label className="flex items-center gap-2 text-sm pt-2">
+                  <input type="checkbox" checked={alsoQuote} onChange={(e) => setAlsoQuote(e.target.checked)} />
+                  Also make a quotation (same pieces) to send on WhatsApp
+                </label>
               </CardContent>
             </Card>
           )}
@@ -462,9 +336,9 @@ export function SimpleOrderModal({ open, onOpenChange }: SimpleOrderModalProps) 
             <Button
               onClick={handleSubmit}
               disabled={createOrderMutation.isPending}
-              className="flex-1 h-12 text-lg bg-blue-600 hover:bg-blue-700"
+              className="flex-1 h-12 text-lg"
             >
-              {createOrderMutation.isPending ? "Creating..." : "Create Order"}
+              {createOrderMutation.isPending ? "Saving…" : "Book this hire"}
             </Button>
           </div>
         </div>

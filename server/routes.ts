@@ -1,10 +1,66 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertInventoryItemSchema, insertOrderSchema, insertOrderItemSchema } from "@shared/schema";
+import { getSwitchFinance } from "./finance";
+import { insertCustomerSchema, insertEnquirySchema, insertExpenseSchema, insertInventoryItemSchema, insertOrderSchema, insertOrderItemSchema, insertPaymentSchema, insertCashPositionSchema, insertCapitalEntrySchema, insertFinanceSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/enquiries", async (req, res) => {
+    try {
+      const cleaned = Object.fromEntries(
+        Object.entries(req.body || {}).map(([key, value]) => [key, value === "" ? undefined : value]),
+      );
+      const parsed = insertEnquirySchema.parse(cleaned);
+      const enquiry = await storage.createEnquiry(parsed);
+      res.status(201).json(enquiry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid enquiry", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save enquiry" });
+    }
+  });
+
+  app.get("/api/enquiries", async (_req, res) => {
+    try {
+      res.json(await storage.getEnquiries());
+    } catch {
+      res.status(500).json({ message: "Failed to fetch enquiries" });
+    }
+  });
+
+  app.patch("/api/enquiries/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateEnquiryStatus(parseInt(req.params.id), String(req.body?.status || "contacted"));
+      if (!updated) return res.status(404).json({ message: "Enquiry not found" });
+      res.json(updated);
+    } catch {
+      res.status(500).json({ message: "Failed to update enquiry" });
+    }
+  });
+
+  app.post("/api/ops/bootstrap", async (_req, res) => {
+    try {
+      res.json(await storage.bootstrapOps());
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to load catalogue and clients" });
+    }
+  });
+
+  app.get("/api/inventory/availability", async (req, res) => {
+    try {
+      const start = String(req.query.start || "");
+      const end = String(req.query.end || "");
+      if (!start || !end) {
+        return res.status(400).json({ message: "start and end dates are required" });
+      }
+      res.json(await storage.getAvailability(start, end));
+    } catch {
+      res.status(500).json({ message: "Failed to check availability" });
+    }
+  });
   // Customers routes
   app.get("/api/customers", async (req, res) => {
     try {
@@ -181,25 +237,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       const { order: orderData, items: itemsData } = createOrderSchema.parse(req.body);
-      
-      // Validate that all items exist and have sufficient stock
+
       for (const item of itemsData) {
         const inventoryItem = await storage.getInventoryItem(item.itemId);
         if (!inventoryItem) {
           return res.status(400).json({ message: `Inventory item ${item.itemId} not found` });
         }
-        if (inventoryItem.availableStock < item.quantity) {
-          return res.status(400).json({ 
-            message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.availableStock}, Requested: ${item.quantity}` 
-          });
-        }
       }
-      
+
       const order = await storage.createOrder(orderData, itemsData);
       res.status(201).json(order);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid order data", errors: error.errors });
+      }
+      if (error instanceof Error && error.message.includes("already booked")) {
+        return res.status(400).json({ message: error.message });
       }
       res.status(500).json({ message: "Failed to create order" });
     }
@@ -240,6 +293,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid status data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update order status" });
+    }
+  });
+
+  app.post("/api/orders/:id/bill", async (req, res) => {
+    try {
+      const invoice = await storage.createBillFromOrder(parseInt(req.params.id));
+      res.status(201).json(invoice);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to raise GST bill" });
     }
   });
 
@@ -321,6 +383,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/invoices/:id/void", async (req, res) => {
+    try {
+      const invoice = await storage.voidInvoice(parseInt(req.params.id));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      res.json(invoice);
+    } catch {
+      res.status(500).json({ message: "Failed to void invoice" });
+    }
+  });
+
+  app.post("/api/invoices/:id/void", async (req, res) => {
+    try {
+      const invoice = await storage.voidInvoice(parseInt(req.params.id));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      res.json(invoice);
+    } catch {
+      res.status(500).json({ message: "Failed to void invoice" });
+    }
+  });
+
   // Inventory Returns routes
   app.get("/api/inventory-returns", async (req, res) => {
     try {
@@ -363,14 +445,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/:id/process-returns", async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
-      const { returns } = req.body;
-      
-      // Process each return and create final settlement invoice
-      const finalInvoice = await storage.processReturnsAndCreateFinalInvoice(invoiceId, returns);
-      res.json(finalInvoice);
+      const extra = {
+        lateDays: req.body.lateDays,
+        toteLost: req.body.toteLost,
+        actualReturnDate: req.body.actualReturnDate,
+      };
+      const returns = (req.body.returns || []).map((row: Record<string, unknown>, i: number) =>
+        i === 0 ? { ...row, ...extra } : row,
+      );
+      res.json(await storage.processReturnsAndCreateFinalInvoice(invoiceId, returns));
     } catch (error) {
       console.error("Return processing error:", error);
       res.status(500).json({ message: "Failed to process returns" });
+    }
+  });
+
+  app.get("/api/finance", async (_req, res) => {
+    try {
+      res.json(await getSwitchFinance());
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to load finance" });
+    }
+  });
+
+  app.get("/api/payments", async (req, res) => {
+    try {
+      const invoiceId = req.query.invoiceId ? parseInt(String(req.query.invoiceId)) : undefined;
+      res.json(await storage.getPayments(invoiceId));
+    } catch {
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/payments", async (req, res) => {
+    try {
+      const parsed = insertPaymentSchema.parse(req.body);
+      res.status(201).json(await storage.createPayment(parsed));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid payment", errors: error.errors });
+      res.status(500).json({ message: "Failed to record payment" });
+    }
+  });
+
+  app.get("/api/expenses", async (_req, res) => {
+    try {
+      res.json(await storage.getExpenses());
+    } catch {
+      res.status(500).json({ message: "Failed to fetch expenses" });
+    }
+  });
+
+  app.post("/api/expenses", async (req, res) => {
+    try {
+      const parsed = insertExpenseSchema.parse(req.body);
+      res.status(201).json(await storage.createExpense(parsed));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid expense", errors: error.errors });
+      res.status(500).json({ message: "Failed to record expense" });
+    }
+  });
+
+  app.get("/api/cash-positions", async (_req, res) => {
+    try {
+      res.json(await storage.getCashPositions());
+    } catch {
+      res.status(500).json({ message: "Failed to fetch cash positions" });
+    }
+  });
+
+  app.post("/api/cash-positions", async (req, res) => {
+    try {
+      const parsed = insertCashPositionSchema.parse(req.body);
+      res.status(201).json(await storage.upsertCashPosition(parsed));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid cash position", errors: error.errors });
+      res.status(500).json({ message: "Failed to save cash position" });
+    }
+  });
+
+  app.get("/api/finance-settings", async (_req, res) => {
+    try {
+      res.json(await storage.getFinanceSettings());
+    } catch {
+      res.status(500).json({ message: "Failed to fetch finance settings" });
+    }
+  });
+
+  app.post("/api/finance-settings", async (req, res) => {
+    try {
+      const parsed = insertFinanceSettingsSchema.partial().parse(req.body);
+      res.json(await storage.upsertFinanceSettings(parsed));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid settings", errors: error.errors });
+      res.status(500).json({ message: "Failed to save settings" });
+    }
+  });
+
+  app.get("/api/capital-entries", async (_req, res) => {
+    try {
+      res.json(await storage.getCapitalEntries());
+    } catch {
+      res.status(500).json({ message: "Failed to fetch capital entries" });
+    }
+  });
+
+  app.post("/api/capital-entries", async (req, res) => {
+    try {
+      const parsed = insertCapitalEntrySchema.parse(req.body);
+      res.status(201).json(await storage.createCapitalEntry(parsed));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid capital entry", errors: error.errors });
+      res.status(500).json({ message: "Failed to record capital" });
+    }
+  });
+
+  app.post("/api/rental-bills", async (req, res) => {
+    try {
+      const itemsCatalog = await storage.getInventoryItems();
+      const hireItem = itemsCatalog[0];
+      if (!hireItem) return res.status(400).json({ message: "Add at least one inventory item first" });
+      const rent = Number(req.body.rentAmount || 0);
+      const packing = Number(req.body.packingAmount ?? Math.round(rent * 0.03 * 100) / 100);
+      const transport = Number(req.body.transportAmount || 0);
+      const mist = Number(req.body.mistAmount || 0);
+      const discount = Number(req.body.discountAmount || 0);
+      const breakage = Number(req.body.breakageAmount || 0);
+      const deposit = Number(req.body.depositAmount || 0);
+      const net = rent + packing + transport + mist - discount + breakage;
+      const gst = Math.round(net * 0.18 * 100) / 100;
+      const dispatchDate = req.body.dispatchDate || req.body.startDate;
+      const endDate = req.body.endDate || req.body.startDate;
+      const invoice = await storage.createInvoice(
+        {
+          customerId: Number(req.body.customerId),
+          orderId: req.body.orderId ? Number(req.body.orderId) : undefined,
+          invoiceType: "gst_invoice",
+          dispatchDate,
+          startDate: req.body.startDate,
+          endDate,
+          returnDate: req.body.returnDate || endDate,
+          eventDetails: req.body.eventDetails || "Crockery hire",
+          subtotal: String(net),
+          gstRate: "18.00",
+          gstAmount: String(gst),
+          totalAmount: String(net + gst),
+          depositAmount: String(deposit),
+          rentAmount: String(rent),
+          packingAmount: String(packing),
+          transportAmount: String(transport),
+          mistAmount: String(mist),
+          discountAmount: String(discount),
+          breakageAmount: String(breakage),
+          status: "sent",
+          notes: req.body.notes,
+          invoiceNumber: req.body.invoiceNumber || undefined,
+        } as any,
+        [
+          {
+            itemId: hireItem.id,
+            quantity: 1,
+            ratePerDay: String(rent),
+            days: 1,
+            lineTotal: String(net),
+          },
+        ],
+      );
+      res.status(201).json(invoice);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to create rental bill" });
     }
   });
 

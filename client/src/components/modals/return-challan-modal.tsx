@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CheckCircle, AlertTriangle, XCircle, Package } from "lucide-react";
+import { lateReturnCharge, toteCharge, todayIso } from "@shared/hire";
 import type { InvoiceWithCustomer } from "@shared/schema";
 
 interface ReturnItem {
@@ -45,6 +46,8 @@ interface ReturnChallanModalProps {
 export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnChallanModalProps) {
   const { toast } = useToast();
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
+  const [actualReturnDate, setActualReturnDate] = useState(todayIso());
+  const [toteLost, setToteLost] = useState("0");
 
   const form = useForm<ReturnChallanFormData>({
     resolver: zodResolver(returnChallanSchema),
@@ -72,16 +75,21 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
   const processReturnsMutation = useMutation({
     mutationFn: async (data: ReturnChallanFormData) => {
       return apiRequest("POST", `/api/invoices/${gstInvoice?.id}/process-returns`, {
-        returns: data.returns
+        returns: data.returns,
+        actualReturnDate,
+        toteLost: Number(toteLost || 0),
       });
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Return challan processed and final invoice generated",
+        title: "Return settled",
+        description: "Breakage, late hire and lost totes are on this GST bill. Stock has been updated.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-returns"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       onOpenChange(false);
     },
     onError: (error: any) => {
@@ -139,6 +147,7 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
   const onSubmit = (data: ReturnChallanFormData) => {
     const returnsData = returnItems.map(item => ({
       itemId: item.itemId,
+      quantityShipped: item.quantityShipped,
       quantityReturned: item.quantityReturned,
       conditionStatus: item.conditionStatus,
       damageNotes: item.damageNotes || '',
@@ -149,6 +158,9 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
   };
 
   const totalPenalty = returnItems.reduce((sum, item) => sum + item.penaltyAmount, 0);
+  const rent = Number(gstInvoice?.rentAmount || gstInvoice?.subtotal || 0);
+  const late = gstInvoice ? lateReturnCharge(rent, gstInvoice.endDate, actualReturnDate) : { extra: 0, extraDays: 0 };
+  const tote = toteCharge(Number(toteLost || 0));
   const perfectItems = returnItems.filter(item => item.conditionStatus === 'perfect').length;
   const damagedItems = returnItems.filter(item => item.conditionStatus === 'damaged').length;
   const missingItems = returnItems.filter(item => item.conditionStatus === 'missing').length;
@@ -196,6 +208,21 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
               <div className="text-xs text-gray-500">GST Invoice</div>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Late return / tote</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <label className="text-xs text-muted-foreground">Actually returned on</label>
+              <Input type="date" value={actualReturnDate} onChange={(e) => setActualReturnDate(e.target.value)} />
+              <label className="text-xs text-muted-foreground">Lost tote boxes</label>
+              <Input type="number" min={0} value={toteLost} onChange={(e) => setToteLost(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                {late.extraDays ? `${late.extraDays} extra day(s) · ₹${late.extra.toLocaleString("en-IN")} late hire` : "On time if back the day after hire end"}
+                {tote ? ` · totes ₹${tote.toLocaleString("en-IN")}` : ""}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Return Summary */}
@@ -238,11 +265,12 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
               </div>
             </div>
             
-            {totalPenalty > 0 && (
+            {totalPenalty + late.extra + tote > 0 && (
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <div className="text-sm text-yellow-800">
-                  <strong>Note:</strong> A final invoice will be automatically generated with penalty charges for damaged/missing items. 
-                  GST (18%) will be applied to all penalty amounts as per Indian tax regulations.
+                  Charges are added to this GST invoice (not a second bill): damage ₹{totalPenalty.toFixed(0)}
+                  {late.extra ? ` · late ${late.extraDays}d ₹${late.extra}` : ""}
+                  {tote ? ` · lost tote ₹${tote}` : ""}. GST 18% applies.
                 </div>
               </div>
             )}
@@ -357,7 +385,7 @@ export function ReturnChallanModal({ open, onOpenChange, gstInvoice }: ReturnCha
                     disabled={processReturnsMutation.isPending}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
-                    {processReturnsMutation.isPending ? "Processing..." : "Process Returns & Generate Final Invoice"}
+                    {processReturnsMutation.isPending ? "Processing..." : "Settle return on this bill"}
                   </Button>
                 </div>
               </form>

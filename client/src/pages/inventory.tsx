@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Package, Search, Filter, Plus, Edit, MoreHorizontal, Trash2, Eye, Settings } from "lucide-react";
+import { Package, Search, Plus, Edit, MoreHorizontal, Trash2, Eye, Settings } from "lucide-react";
+import { formatINR, catalogueCode } from "@/lib/format";
 import type { InventoryItem } from "@shared/schema";
 
 function getStockStatus(item: InventoryItem): { status: string; variant: "default" | "secondary" | "destructive" } {
@@ -92,43 +93,60 @@ export default function Inventory() {
     },
   });
 
+  const bootstrap = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ops/bootstrap");
+      return res.json();
+    },
+    onSuccess: (data: { itemsAdded: number; clientsAdded: number; items: number; clients: number }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Catalogue loaded",
+        description: `${data.itemsAdded} new SKUs, ${data.clientsAdded} clients from the revenue tracker. ${data.items} pieces and ${data.clients} clients in the system.`,
+      });
+    },
+    onError: () => toast({ title: "Could not load catalogue", variant: "destructive" }),
+  });
+
   const filteredInventory = inventory?.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.itemCode || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.description?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        title="Inventory" 
-        subtitle="Manage your crockery items and track stock levels."
+        title="Catalogue"
+        subtitle="Every piece has a code. Floor staff type the code when building a hire."
       />
       
       <div className="p-6 space-y-6 flex-1">
         {/* Search and Filters */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4 flex-1">
-                <div className="flex-1 relative max-w-md">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 relative max-w-md">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="Search inventory items..."
+                    placeholder="Search code, name, category…"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                   />
-                </div>
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
               </div>
+              <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => bootstrap.mutate()} disabled={bootstrap.isPending}>
+                Load Switch catalogue
+              </Button>
               <Button onClick={() => setShowInventoryModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Item
               </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -169,6 +187,7 @@ export default function Inventory() {
                 <table className="w-full min-w-[800px]">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
@@ -187,6 +206,7 @@ export default function Inventory() {
                       const maintenanceStatus = getMaintenanceStatus(item.maintenanceStatus);
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-2 py-4 whitespace-nowrap font-mono text-sm text-primary">{catalogueCode(item)}</td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="w-8 h-8 bg-gray-200 rounded-lg mr-3 flex items-center justify-center">
@@ -204,7 +224,7 @@ export default function Inventory() {
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">{item.totalStock}</td>
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{item.availableStock}</td>
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500">{item.totalStock - item.availableStock}</td>
-                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₹{item.ratePerDay}</td>
+                          <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatINR(item.ratePerDay)}</td>
                           <td className="px-2 py-4 whitespace-nowrap">
                             <Badge variant={maintenanceStatus.variant} className="text-xs">
                               {maintenanceStatus.label}

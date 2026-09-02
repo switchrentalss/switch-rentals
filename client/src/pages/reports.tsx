@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Download, Calendar, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
+import { formatDate, formatINR } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -21,6 +22,11 @@ export default function Reports() {
     queryKey: ["/api/dashboard/metrics"],
   });
 
+  const { data: finance } = useQuery<{
+    story: { billedNet: number; cashCollected: number; stillOwed: number; operatingProfit: number; operatingExpenses: number };
+    ageing?: { d0_30: number; d31_60: number; d61_90: number; d90: number };
+  }>({ queryKey: ["/api/finance"] });
+
   const { data: inventory } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
   });
@@ -35,44 +41,31 @@ export default function Reports() {
   // Report generation functions
   const generateMonthlyRevenueReport = () => {
     const doc = new jsPDF();
-    
-    // Header
     doc.setFontSize(20);
-    doc.text('Switch Rental Services LLP', 20, 30);
+    doc.text("Switch Rental Services LLP", 20, 30);
     doc.setFontSize(16);
-    doc.text('Monthly Revenue Report', 20, 45);
+    doc.text("Owner P&L (live books)", 20, 45);
     doc.setFontSize(12);
-    doc.text(`Generated on: ${format(new Date(), 'dd/MM/yyyy')}`, 20, 55);
-    
-    // Summary
-    doc.text(`Total Orders: ${totalOrders}`, 20, 75);
-    doc.text(`Total Revenue: ₹${totalRevenue.toLocaleString()}`, 20, 85);
-    doc.text(`Average Order Value: ₹${avgOrderValue.toLocaleString()}`, 20, 95);
-    
-    // Orders table
-    if (orders && orders.length > 0) {
-      const tableData = orders.map(order => [
-        order.orderNumber,
-        order.customer.name,
-        format(new Date(order.eventDate), 'dd/MM/yyyy'),
-        order.status,
-        `₹${parseFloat(order.totalAmount).toLocaleString()}`
-      ]);
-      
-      (doc as any).autoTable({
-        head: [['Order No.', 'Customer', 'Event Date', 'Status', 'Amount']],
-        body: tableData,
-        startY: 110,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [41, 128, 185] }
-      });
+    doc.text(`Generated on: ${format(new Date(), "dd/MM/yyyy")}`, 20, 55);
+    const s = finance?.story;
+    if (s) {
+      doc.text(`Earned net: ${formatINR(s.billedNet)}`, 20, 75);
+      doc.text(`Cash collected: ${formatINR(s.cashCollected)}`, 20, 85);
+      doc.text(`Still owed: ${formatINR(s.stillOwed)}`, 20, 95);
+      doc.text(`Operating expenses: ${formatINR(s.operatingExpenses)}`, 20, 105);
+      doc.text(`Operating profit: ${formatINR(s.operatingProfit)}`, 20, 115);
+      if (finance.ageing) {
+        doc.text(
+          `AR ageing 0-30 ${formatINR(finance.ageing.d0_30)} · 90+ ${formatINR(finance.ageing.d90)}`,
+          20,
+          130,
+        );
+      }
+    } else {
+      doc.text("Financial data unavailable. Open the Financial Dashboard first.", 20, 75);
     }
-    
-    doc.save('monthly_revenue_report.pdf');
-    toast({
-      title: "Report Generated",
-      description: "Monthly revenue report has been downloaded successfully.",
-    });
+    doc.save("switch-rentals-owner-pnl.pdf");
+    toast({ title: "Report generated", description: "Owner P&L downloaded from live books, not order estimates." });
   };
 
   const generateInventoryUtilizationReport = () => {
@@ -194,7 +187,7 @@ export default function Reports() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">₹{totalRevenue.toFixed(2)}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">{formatINR(totalRevenue)}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-green-600" />
@@ -208,7 +201,7 @@ export default function Reports() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg Order Value</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">₹{avgOrderValue.toFixed(2)}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">{formatINR(avgOrderValue)}</p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <Calendar className="w-6 h-6 text-purple-600" />
@@ -245,8 +238,8 @@ export default function Reports() {
                 onClick={generateMonthlyRevenueReport}
               >
                 <div className="text-left">
-                  <div className="font-medium">Monthly Revenue Report</div>
-                  <div className="text-sm text-gray-500">Generate revenue breakdown by month</div>
+                  <div className="font-medium">Owner P&L (live books)</div>
+                  <div className="text-sm text-gray-500">Earned, cash, opex, operating profit</div>
                 </div>
                 <Download className="w-4 h-4 ml-auto" />
               </Button>
@@ -317,10 +310,10 @@ export default function Reports() {
                           <div className="text-sm text-gray-900">{order.customer.name}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {format(new Date(order.createdAt), "MMM dd, yyyy")}
+                          {formatDate(order.createdAt)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ₹{order.totalAmount}
+                          {formatINR(order.totalAmount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <Badge variant={order.status === "active" ? "default" : "secondary"}>

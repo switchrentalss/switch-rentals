@@ -109,6 +109,13 @@ export const invoices = pgTable("invoices", {
   gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }).default("0.00"),
+  rentAmount: decimal("rent_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  packingAmount: decimal("packing_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  transportAmount: decimal("transport_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  mistAmount: decimal("mist_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  discountAmount: decimal("discount_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  breakageAmount: decimal("breakage_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  returnDate: date("return_date"),
   sampleType: varchar("sample_type", { length: 20 }).default("none"), // none, free_1day, paid
   status: varchar("status", { length: 20 }).default("draft"), // draft, sent, paid, overdue
   dueDate: date("due_date"),
@@ -131,7 +138,7 @@ export const invoiceItems = pgTable("invoice_items", {
 
 export const inventoryReturns = pgTable("inventory_returns", {
   id: serial("id").primaryKey(),
-  orderId: integer("order_id").references(() => orders.id).notNull(),
+  orderId: integer("order_id").references(() => orders.id),
   invoiceId: integer("invoice_id").references(() => invoices.id),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   quantityShipped: integer("quantity_shipped").notNull(),
@@ -142,6 +149,69 @@ export const inventoryReturns = pgTable("inventory_returns", {
   checkedBy: varchar("checked_by", { length: 100 }),
   returnDate: timestamp("return_date").defaultNow(),
   createdAt: timestamp("created_at").defaultNow()
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").references(() => invoices.id).notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  paidOn: date("paid_on").notNull(),
+  method: varchar("method", { length: 20 }).notNull().default("bank"),
+  kind: varchar("kind", { length: 20 }).notNull().default("invoice"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const expenses = pgTable("operating_expenses", {
+  id: serial("id").primaryKey(),
+  spentOn: date("spent_on").notNull(),
+  costGroup: varchar("cost_group", { length: 20 }).notNull(),
+  category: varchar("category", { length: 80 }).notNull(),
+  description: text("description").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  vendor: varchar("vendor", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const cashPositions = pgTable("cash_positions", {
+  id: serial("id").primaryKey(),
+  asOf: date("as_of").notNull().unique(),
+  bankAmount: decimal("bank_amount", { precision: 12, scale: 2 }).notNull(),
+  cashAmount: decimal("cash_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const financeSettings = pgTable("finance_settings", {
+  id: serial("id").primaryKey(),
+  annualBudgetNet: decimal("annual_budget_net", { precision: 14, scale: 2 }).notNull().default("7000000.00"),
+  samirName: varchar("samir_name", { length: 80 }).notNull().default("Samir Chhabria"),
+  karanName: varchar("karan_name", { length: 80 }).notNull().default("Karan Khiani"),
+  samirShare: decimal("samir_share", { precision: 6, scale: 4 }).notNull().default("0.7400"),
+  karanShare: decimal("karan_share", { precision: 6, scale: 4 }).notNull().default("0.2600"),
+});
+
+export const capitalEntries = pgTable("capital_entries", {
+  id: serial("id").primaryKey(),
+  partner: varchar("partner", { length: 20 }).notNull(),
+  kind: varchar("kind", { length: 20 }).notNull(),
+  amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+  occurredOn: date("occurred_on").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const enquiries = pgTable("enquiries", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  company: varchar("company", { length: 255 }),
+  phone: varchar("phone", { length: 30 }),
+  email: varchar("email", { length: 255 }),
+  eventDate: varchar("event_date", { length: 20 }),
+  covers: varchar("covers", { length: 50 }),
+  message: text("message"),
+  status: varchar("status", { length: 20 }).notNull().default("new"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Insert schemas
@@ -199,6 +269,36 @@ export const insertInventoryReturnSchema = createInsertSchema(inventoryReturns).
   createdAt: true,
 });
 
+export const insertEnquirySchema = createInsertSchema(enquiries).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCashPositionSchema = createInsertSchema(cashPositions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFinanceSettingsSchema = createInsertSchema(financeSettings).omit({
+  id: true,
+});
+
+export const insertCapitalEntrySchema = createInsertSchema(capitalEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Customer = typeof customers.$inferSelect;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
@@ -240,6 +340,20 @@ export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
 
 export type InventoryReturn = typeof inventoryReturns.$inferSelect;
 export type InsertInventoryReturn = z.infer<typeof insertInventoryReturnSchema>;
+
+export type Enquiry = typeof enquiries.$inferSelect;
+export type InsertEnquiry = z.infer<typeof insertEnquirySchema>;
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Expense = typeof expenses.$inferSelect;
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type CashPosition = typeof cashPositions.$inferSelect;
+export type InsertCashPosition = z.infer<typeof insertCashPositionSchema>;
+export type FinanceSettings = typeof financeSettings.$inferSelect;
+export type InsertFinanceSettings = z.infer<typeof insertFinanceSettingsSchema>;
+export type CapitalEntry = typeof capitalEntries.$inferSelect;
+export type InsertCapitalEntry = z.infer<typeof insertCapitalEntrySchema>;
 
 export type InvoiceWithCustomer = Invoice & {
   customer: Customer;

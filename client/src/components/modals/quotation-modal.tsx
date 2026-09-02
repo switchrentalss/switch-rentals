@@ -16,7 +16,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calculator, IndianRupee, Package, Calendar, FileText } from "lucide-react";
+import { sendInvoiceAndToast } from "@/utils/pdf-generator";
+import { CataloguePicker, type HireLine } from "@/components/catalogue-picker";
+import { packingOnRent } from "@/lib/billing";
+import { rentalDays } from "@/lib/format";
+import { Calculator, IndianRupee, Package, Calendar, FileText } from "lucide-react";
 
 const formSchema = z.object({
   customerId: z.number().min(1, "Please select a customer"),
@@ -45,6 +49,7 @@ interface QuotationModalProps {
 
 export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   const [gstRate] = useState(18);
+  const [lines, setLines] = useState<HireLine[]>([]);
   const { toast } = useToast();
 
   const form = useForm<FormData>({
@@ -63,10 +68,24 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
     }
   });
 
-  const { fields, append, remove } = useFieldArray({
+  useFieldArray({
     control: form.control,
     name: "items"
   });
+
+  useEffect(() => {
+    form.setValue(
+      "items",
+      lines.length
+        ? lines.map((line) => ({
+            itemId: line.itemId,
+            quantity: line.quantity,
+            ratePerDay: String(line.ratePerDay),
+            totalAmount: String(line.totalAmount),
+          }))
+        : [{ itemId: 0, quantity: 1, ratePerDay: "", totalAmount: "" }],
+    );
+  }, [lines]);
 
   const { data: customers = [] } = useQuery<any[]>({
     queryKey: ["/api/customers"],
@@ -94,14 +113,18 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (invoice) => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
-        title: "Success",
-        description: "Quotation created successfully"
+        title: "Quotation created",
+        description: "Opening WhatsApp so you can send it to the purchaser.",
       });
+      if (invoice?.invoiceNumber) {
+        await sendInvoiceAndToast(invoice, toast);
+      }
       onOpenChange(false);
       form.reset();
+      setLines([]);
     },
     onError: () => {
       toast({
@@ -113,40 +136,25 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
   });
 
   // Calculate totals
-  const watchedItems = form.watch("items");
   const depositAmount = parseFloat(form.watch("depositAmount") || "0");
   const sampleType = form.watch("sampleType");
+  const startDate = form.watch("startDate");
+  const endDate = form.watch("endDate");
+  const hireDays = rentalDays(startDate, endDate);
 
-  const calculateItemTotal = (quantity: number, ratePerDay: string, startDate?: string, endDate?: string) => {
-    if (!ratePerDay || !quantity) return 0;
-    
-    // Simple calculation: quantity × rate per day
-    return quantity * parseFloat(ratePerDay);
-  };
-
-  const subtotal = watchedItems.reduce((sum, item, index) => {
-    return sum + calculateItemTotal(item.quantity, item.ratePerDay);
-  }, 0);
-
-  // Add sample charges if applicable
-  const sampleCharges = sampleType === "paid" ? subtotal * 0.1 : 0; // 10% for paid samples
-  const totalBeforeGst = subtotal + sampleCharges + depositAmount;
+  const subtotal = lines.reduce((sum, line) => sum + line.totalAmount, 0);
+  const packing = packingOnRent(subtotal);
+  const sampleCharges = sampleType === "paid" ? subtotal * 0.1 : 0;
+  const totalBeforeGst = subtotal + packing + sampleCharges;
   const gstAmount = totalBeforeGst * (gstRate / 100);
   const totalAmount = totalBeforeGst + gstAmount;
 
-  // Update item totals when any relevant field changes
-  useEffect(() => {
-    watchedItems.forEach((item, index) => {
-      if (item.quantity && item.ratePerDay) {
-        const total = calculateItemTotal(item.quantity, item.ratePerDay);
-        form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
-      }
-    });
-  }, [watchedItems]);
-
   const onSubmit = (data: FormData) => {
-    const days = data.startDate && data.endDate ? 
-      Math.max(1, Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24))) : 1;
+    if (!lines.length) {
+      toast({ title: "Add pieces", description: "Type a catalogue code or tap items before saving.", variant: "destructive" });
+      return;
+    }
+    const days = rentalDays(data.startDate, data.endDate);
 
     const invoiceData = {
       invoice: {
@@ -156,22 +164,24 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
         startDate: data.startDate,
         endDate: data.endDate,
         eventDetails: data.eventDetails,
-        subtotal: subtotal.toFixed(2),
+        subtotal: totalBeforeGst.toFixed(2),
         gstRate: gstRate.toString(),
         gstAmount: gstAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         depositAmount: data.depositAmount,
+        rentAmount: subtotal.toFixed(2),
+        packingAmount: packing.toFixed(2),
         sampleType: data.sampleType,
         status: "draft",
         terms: data.terms,
         notes: data.notes
       },
-      items: data.items.map(item => ({
+      items: lines.map(item => ({
         itemId: item.itemId,
         quantity: item.quantity,
-        ratePerDay: item.ratePerDay,
+        ratePerDay: String(item.ratePerDay),
         days: days,
-        lineTotal: item.totalAmount
+        lineTotal: item.totalAmount.toFixed(2)
       }))
     };
 
@@ -355,142 +365,17 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
               </CardContent>
             </Card>
 
-            {/* Items */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center justify-between">
-                  <span>Rental Items</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => append({ itemId: 0, quantity: 1, ratePerDay: "", totalAmount: "" })}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Item
-                  </Button>
-                </CardTitle>
+                <CardTitle className="text-lg">Pieces from the catalogue</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {fields.map((field, index) => (
-                    <div key={field.id} className="flex items-end space-x-2 p-4 border rounded-lg">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.itemId`}
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel>Item *</FormLabel>
-                            <Select 
-                              onValueChange={(value) => {
-                                const selectedItem = (inventoryItems as any[]).find((item: any) => item.id === parseInt(value));
-                                field.onChange(parseInt(value));
-                                if (selectedItem) {
-                                  form.setValue(`items.${index}.ratePerDay`, selectedItem.ratePerDay);
-                                  // Trigger recalculation
-                                  const quantity = form.getValues(`items.${index}.quantity`);
-                                  if (quantity) {
-                                    const total = calculateItemTotal(quantity, selectedItem.ratePerDay);
-                                    form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
-                                  }
-                                }
-                              }}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select item" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {(inventoryItems as any[]).map((item: any) => (
-                                  <SelectItem key={item.id} value={item.id.toString()}>
-                                    {item.name} - ₹{item.ratePerDay}/day
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.quantity`}
-                        render={({ field }) => (
-                          <FormItem className="w-24">
-                            <FormLabel>Qty *</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                min="1"
-                                {...field}
-                                onChange={(e) => {
-                                  const newValue = e.target.value === "" ? "" : parseInt(e.target.value);
-                                  field.onChange(newValue);
-                                  // Trigger recalculation when quantity changes
-                                  const ratePerDay = form.getValues(`items.${index}.ratePerDay`);
-                                  if (newValue && ratePerDay) {
-                                    const total = calculateItemTotal(parseInt(e.target.value), ratePerDay);
-                                    form.setValue(`items.${index}.totalAmount`, total.toFixed(2));
-                                  }
-                                }}
-                                onFocus={(e) => e.target.select()} // Select all text on focus
-                                value={field.value === 0 ? "" : field.value} // Show empty string instead of 0
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.ratePerDay`}
-                        render={({ field }) => (
-                          <FormItem className="w-28">
-                            <FormLabel>Rate/Day</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01"
-                                {...field}
-                                onFocus={(e) => e.target.select()} // Select all text on focus
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.totalAmount`}
-                        render={({ field }) => (
-                          <FormItem className="w-32">
-                            <FormLabel>Total</FormLabel>
-                            <FormControl>
-                              <Input {...field} readOnly className="bg-gray-50" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {fields.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => remove(index)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <CataloguePicker
+                  inventory={inventoryItems}
+                  days={hireDays}
+                  selectedItems={lines}
+                  setSelectedItems={setLines}
+                />
               </CardContent>
             </Card>
 
@@ -505,8 +390,12 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span>Rental Subtotal:</span>
+                    <span>Rental</span>
                     <span>₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Packing 3%</span>
+                    <span>₹{packing.toFixed(2)}</span>
                   </div>
                   {sampleCharges > 0 && (
                     <div className="flex justify-between">
@@ -516,7 +405,7 @@ export function QuotationModal({ open, onOpenChange }: QuotationModalProps) {
                   )}
                   {depositAmount > 0 && (
                     <div className="flex justify-between">
-                      <span>Security Deposit:</span>
+                      <span>Security deposit (held, not GST)</span>
                       <span>₹{depositAmount.toFixed(2)}</span>
                     </div>
                   )}

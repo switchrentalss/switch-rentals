@@ -7,13 +7,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Header } from "@/components/layout/header";
-import { generateInvoicePDF } from "@/utils/pdf-generator";
+import { generateInvoicePDF, sendInvoiceAndToast } from "@/utils/pdf-generator";
+import { formatDate, formatINR } from "@/lib/format";
 import { QuotationModal } from "@/components/modals/quotation-modal";
 import { ReturnChallanModal } from "@/components/modals/return-challan-modal";
 import { ReturnTrackingModal } from "@/components/modals/return-tracking-modal";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
+  MessageCircle,
   FileText, 
   Plus, 
   Download, 
@@ -46,16 +48,25 @@ interface Invoice {
   totalAmount: string;
   depositAmount?: string;
   sampleType?: 'none' | 'free_1day' | 'paid';
-  status: 'draft' | 'sent' | 'paid' | 'overdue';
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'partial' | 'void' | 'converted';
   dueDate?: string;
   terms?: string;
   notes?: string;
   createdAt: string;
+  rentAmount?: string;
+  packingAmount?: string;
+  transportAmount?: string;
+  mistAmount?: string;
+  discountAmount?: string;
+  breakageAmount?: string;
   customer?: {
     id: number;
     name: string;
     email: string;
+    phone?: string;
     company?: string;
+    address?: string;
+    gstNumber?: string;
   };
   items?: any[];
 }
@@ -80,15 +91,21 @@ interface InventoryReturn {
 function InvoiceStatusBadge({ status }: { status: string }) {
   const variants = {
     'draft': 'secondary',
+    'converted': 'secondary',
     'sent': 'default',
     'paid': 'default',
+    'partial': 'default',
+    'void': 'destructive',
     'overdue': 'destructive'
   } as const;
 
   const colors = {
     'draft': 'text-gray-600',
+    'converted': 'text-emerald-700',
     'sent': 'text-blue-600',
     'paid': 'text-green-600',
+    'partial': 'text-amber-700',
+    'void': 'text-red-700',
     'overdue': 'text-red-600'
   };
 
@@ -154,12 +171,17 @@ export default function Invoices() {
       if (!response.ok) throw new Error("Failed to convert invoice");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (invoice) => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
-        title: "Success",
-        description: "Invoice converted successfully"
+        title: "Invoice ready",
+        description: invoice.invoiceNumber
+          ? `${invoice.invoiceNumber} created. Opening WhatsApp for the purchaser.`
+          : "Invoice converted successfully",
       });
+      if (invoice?.invoiceNumber) {
+        await sendInvoiceAndToast(invoice, toast);
+      }
     },
     onError: () => {
       toast({
@@ -169,6 +191,28 @@ export default function Invoices() {
       });
     }
   });
+
+  const markInvoiceSent = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/invoices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "sent" }),
+      });
+      if (!response.ok) throw new Error("Failed to update invoice");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    },
+  });
+
+  async function shareInvoiceOnWhatsApp(invoice: Invoice) {
+    if (invoice.status === "draft") {
+      markInvoiceSent.mutate(invoice.id);
+    }
+    await sendInvoiceAndToast(invoice as any, toast);
+  }
 
   // Fetch invoices by type
   const { data: quotations = [], isLoading: quotationsLoading } = useQuery({
@@ -235,43 +279,46 @@ export default function Invoices() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Dispatch Date:</span>
-              <span>{new Date(invoice.dispatchDate).toLocaleDateString()}</span>
+              <span>{formatDate(invoice.dispatchDate)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Amount:</span>
-              <span className="font-semibold">₹{invoice.totalAmount}</span>
+              <span className="font-semibold">{formatINR(invoice.totalAmount)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">GST ({invoice.gstRate}%):</span>
-              <span>₹{invoice.gstAmount}</span>
+              <span>{formatINR(invoice.gstAmount)}</span>
             </div>
             <div className="text-xs text-gray-500 mt-2">
               {invoice.eventDetails}
             </div>
             
-            <div className="flex space-x-2 pt-3">
+            <div className="flex flex-wrap gap-2 pt-3">
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={() => generateInvoicePDF(invoice)}
+                size="sm"
+                onClick={() => generateInvoicePDF(invoice as any)}
               >
                 <Download className="h-3 w-3 mr-1" />
                 PDF
               </Button>
-              {invoice.invoiceType === 'quotation' && invoice.status === 'draft' && (
-                <div className="flex space-x-1">
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'proforma' })}
-                    disabled={convertToInvoice.isPending}
-                    className="flex-1"
-                  >
-                    <ArrowRight className="h-3 w-3 mr-1" />
-                    To Proforma
-                  </Button>
-                </div>
+              <Button
+                size="sm"
+                onClick={() => shareInvoiceOnWhatsApp(invoice)}
+              >
+                <MessageCircle className="h-3 w-3 mr-1" />
+                Send WhatsApp
+              </Button>
+              {invoice.invoiceType === 'quotation' && (invoice.status === 'draft' || invoice.status === 'sent') && (
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={() => convertToInvoice.mutate({ quoteId: invoice.id, invoiceType: 'proforma' })}
+                  disabled={convertToInvoice.isPending}
+                >
+                  <ArrowRight className="h-3 w-3 mr-1" />
+                  To Proforma
+                </Button>
               )}
               {invoice.invoiceType === 'proforma' && invoice.status === 'sent' && (
                 <Button 
@@ -285,7 +332,7 @@ export default function Invoices() {
                   To GST Invoice
                 </Button>
               )}
-              {invoice.invoiceType === 'gst_invoice' && invoice.status === 'paid' && (
+              {invoice.invoiceType === 'gst_invoice' && invoice.status !== 'void' && (
                 <Button 
                   variant="default" 
                   size="sm" 
@@ -297,6 +344,34 @@ export default function Invoices() {
                 >
                   <Package className="h-3 w-3 mr-1" />
                   Process Returns
+                </Button>
+              )}
+              {invoice.invoiceType === 'gst_invoice' && invoice.status !== 'void' && invoice.status !== 'paid' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = "/books";
+                  }}
+                >
+                  Record payment in Books
+                </Button>
+              )}
+              {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-red-700"
+                  onClick={async () => {
+                    const res = await fetch(`/api/invoices/${invoice.id}/void`, { method: "POST" });
+                    if (!res.ok) return;
+                    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/finance"] });
+                    toast({ title: "Invoice voided", description: "It is excluded from the financial dashboard." });
+                  }}
+                >
+                  Void
                 </Button>
               )}
             </div>
@@ -348,17 +423,9 @@ export default function Invoices() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header title="GST Invoices & Return Processing" subtitle="Complete Indian GST invoice workflow with automated return challan processing" />
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            GST Invoices, Quotations, and Return Tracking
-          </h1>
-          <p className="text-gray-600">
-            Manage quotations, proforma invoices, GST invoices, final settlements, and inventory returns
-          </p>
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <Header title="Invoices & returns" subtitle="Quotations, GST invoices, and return tracking for Switch Rentals." actionLabel="New quotation" onAction={() => setCreateInvoiceOpen(true)} />
+      <main className="p-6 space-y-6">
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -379,7 +446,7 @@ export default function Invoices() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{gstInvoices.filter((i: Invoice) => i.status === 'sent').length}</div>
+              <div className="text-2xl font-bold">{gstInvoices.filter((i: Invoice) => i.status === 'sent' || i.status === 'partial').length}</div>
               <p className="text-xs text-muted-foreground">Awaiting payment</p>
             </CardContent>
           </Card>
@@ -397,13 +464,13 @@ export default function Invoices() {
         </div>
 
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <div className="flex items-center justify-between">
-            <TabsList className="grid w-full grid-cols-5">
+          <div className="flex flex-col xl:flex-row xl:items-center gap-3 justify-between">
+            <TabsList className="grid w-full xl:w-auto grid-cols-2 sm:grid-cols-5">
               <TabsTrigger value="quotations">Quotations</TabsTrigger>
-              <TabsTrigger value="proforma-invoices">Proforma Invoices</TabsTrigger>
-              <TabsTrigger value="gst-invoices">GST Invoices</TabsTrigger>
-              <TabsTrigger value="final-invoices">Final Invoices</TabsTrigger>
-              <TabsTrigger value="returns">Return Tracking</TabsTrigger>
+              <TabsTrigger value="proforma-invoices">Proforma</TabsTrigger>
+              <TabsTrigger value="gst-invoices">GST</TabsTrigger>
+              <TabsTrigger value="final-invoices">Final</TabsTrigger>
+              <TabsTrigger value="returns">Returns</TabsTrigger>
             </TabsList>
 
             <div className="flex space-x-2">
