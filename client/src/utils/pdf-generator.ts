@@ -129,17 +129,27 @@ function chargeLines(invoice: InvoiceData) {
   return { rent, discount, mist, transport, packing, breakage, totalA, cgst, sgst, gst, gross };
 }
 
-async function dataUrl(path: string) {
+/** Rasterize to a small JPEG so jsPDF does not embed a 4k transparent PNG as ~80MB of raw pixels. */
+async function jpegForPdf(path: string, maxEdge: number, quality = 0.82) {
   try {
-    const res = await fetch(path);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error(`Could not load ${path}`));
+      el.src = path;
     });
+    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", quality);
   } catch {
     return null;
   }
@@ -166,13 +176,16 @@ export async function buildInvoicePdf(invoice: InvoiceData) {
   const deposit = n(invoice.depositAmount);
   const collect = amountToCollect(c.gross, deposit);
   const ask = invoice.invoiceType === "proforma" || invoice.invoiceType === "quotation";
-  const [logo, qr] = await Promise.all([dataUrl("/billing/letterhead-logo.png"), dataUrl("/billing/upi-qr.png")]);
+  const [logo, qr] = await Promise.all([
+    jpegForPdf("/billing/letterhead-logo.jpg", 900, 0.82),
+    jpegForPdf("/billing/upi-qr.jpg", 420, 0.9),
+  ]);
 
   let y = 12;
   if (logo) {
     const logoW = 52;
-    const logoH = logoW * (853 / 1400);
-    doc.addImage(logo, "PNG", (pageW - logoW) / 2, y, logoW, logoH);
+    const logoH = logoW * (548 / 900);
+    doc.addImage(logo, "JPEG", (pageW - logoW) / 2, y, logoW, logoH, undefined, "FAST");
     y += logoH + 5;
   } else {
     doc.setTextColor(...INK);
@@ -345,7 +358,7 @@ export async function buildInvoicePdf(invoice: InvoiceData) {
   });
   if (showsQr(invoice.invoiceType) && qr) {
     const qrX = pageW - MARGIN - qrW;
-    doc.addImage(qr, "PNG", qrX, bankTop, qrW, qrW * (378 / 360));
+    doc.addImage(qr, "JPEG", qrX, bankTop, qrW, qrW * (378 / 360), undefined, "FAST");
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
     doc.text("Scan to pay · ICICI UPI", qrX + qrW / 2, bankTop + qrW * (378 / 360) + 4, { align: "center" });
