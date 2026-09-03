@@ -57,7 +57,6 @@ const INK: [number, number, number] = [32, 28, 26];
 const MUTED: [number, number, number] = [90, 82, 76];
 const RULE: [number, number, number] = [92, 48, 38];
 const HEAD: [number, number, number] = [88, 88, 88];
-const BAND: [number, number, number] = [28, 24, 22];
 const GREEN: [number, number, number] = [22, 122, 58];
 const YELLOW: [number, number, number] = [245, 214, 64];
 const GREY: [number, number, number] = [214, 214, 214];
@@ -167,20 +166,21 @@ export async function buildInvoicePdf(invoice: InvoiceData) {
   const deposit = n(invoice.depositAmount);
   const collect = amountToCollect(c.gross, deposit);
   const ask = invoice.invoiceType === "proforma" || invoice.invoiceType === "quotation";
-  const [logo, qr] = await Promise.all([dataUrl(site.logo), dataUrl("/billing/upi-qr.png")]);
+  const [logo, qr] = await Promise.all([dataUrl("/billing/letterhead-logo.png"), dataUrl("/billing/upi-qr.png")]);
 
-  doc.setFillColor(...BAND);
-  doc.rect(0, 0, pageW, 36, "F");
+  let y = 12;
   if (logo) {
-    doc.addImage(logo, "PNG", (pageW - 28) / 2, 4, 28, 28);
+    const logoW = 52;
+    const logoH = logoW * (853 / 1400);
+    doc.addImage(logo, "PNG", (pageW - logoW) / 2, y, logoW, logoH);
+    y += logoH + 5;
   } else {
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text("SWITCH RENTAL SERVICES LLP", pageW / 2, 20, { align: "center" });
+    doc.setFontSize(14);
+    doc.text("SWITCH RENTAL SERVICES LLP", pageW / 2, y + 6, { align: "center" });
+    y += 12;
   }
-
-  let y = 42;
   doc.setTextColor(...INK);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
