@@ -179,6 +179,8 @@ export default function FinancialDashboard() {
         <p className="text-sm text-muted-foreground max-w-3xl">
           Type bills and payments in{" "}
           <Link href="/books" className="underline text-foreground font-medium">Books</Link>
+          . Costs from the old Excel live in{" "}
+          <Link href="/workbook" className="underline text-foreground font-medium">Workbook</Link>
           . This page only reads them.
           {s.dsoDays ? ` On average, clients take about ${Math.round(s.dsoDays)} days to pay.` : null}
         </p>
@@ -411,7 +413,7 @@ export default function FinancialDashboard() {
                 <p>Crockery bought {formatINR(data.capex?.stockPurchases || 0)}</p>
                 <p className="font-medium">Still unspent {formatINR(data.capex?.remainingCapital || 0)}</p>
                 <p className="text-xs text-muted-foreground">Opening stock plus this year’s CCG. Civil / legal mill setup stays on the Workbook CapEx tab.</p>
-                <Link href="/workbook"><Button variant="outline" size="sm" className="mt-2">Open Excel workbook</Button></Link>
+                <Link href="/workbook"><Button variant="outline" size="sm" className="mt-2">Open workbook (cost centres)</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>
