@@ -4,11 +4,10 @@ import { join } from "path";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
+import { importWorkbookBooks } from "./import-workbook";
 import {
   capitalEntries,
-  cashPositions,
   customers,
-  expenses,
   financeSettings,
   inventoryItems,
   invoiceItems,
@@ -85,27 +84,6 @@ async function seedLiveBooks(hireItemId: number) {
     }
     invoicesAdded += 1;
   }
-  for (const [month, block] of Object.entries(finance.expensesByMonth || {}) as any) {
-    if (!["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].includes(month)) continue;
-    for (const line of block.lines || []) {
-      if (!line.amount) continue;
-      await db.insert(expenses).values({
-        spentOn: lastDay(month),
-        costGroup: line.group,
-        category: line.name,
-        description: line.name,
-        amount: String(line.amount),
-      });
-    }
-  }
-  for (const [month, pos] of Object.entries(finance.cash || {}) as any) {
-    await db.insert(cashPositions).values({
-      asOf: lastDay(month),
-      bankAmount: String(pos.bank || 0),
-      cashAmount: String(pos.cash || 0),
-      notes: "Imported from cash-flow workbook",
-    });
-  }
   return { invoicesAdded, skipped };
 }
 
@@ -149,6 +127,7 @@ async function main() {
   const [hireItem] = await db.select().from(inventoryItems).limit(1);
   if (!hireItem) throw new Error("Catalogue did not load");
   const books = await seedLiveBooks(hireItem.id);
+  const workbook = await importWorkbookBooks();
 
   await db.delete(financeSettings);
   await db.insert(financeSettings).values({
@@ -183,6 +162,8 @@ async function main() {
         extraClients,
         invoices: books.invoicesAdded,
         skippedInvoices: books.skipped,
+        workbookExpenses: workbook.expenses,
+        workbookSheets: workbook.sheets,
       },
       null,
       2,

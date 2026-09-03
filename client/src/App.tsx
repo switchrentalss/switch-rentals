@@ -9,6 +9,8 @@ import Orders from "@/pages/orders";
 import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Reports from "@/pages/reports";
+import StockValue from "@/pages/stock-value";
+import WorkbookPage from "@/pages/workbook";
 import FinancialDashboard from "@/pages/financial-dashboard";
 import Books from "@/pages/books";
 import Invoices from "@/pages/invoices";
@@ -60,6 +62,16 @@ function Operations() {
               </OwnerOnly>
             </Route>
             <Route path="/invoices" component={Invoices} />
+            <Route path="/workbook">
+              <OwnerOnly>
+                <WorkbookPage />
+              </OwnerOnly>
+            </Route>
+            <Route path="/stock-value">
+              <OwnerOnly>
+                <StockValue />
+              </OwnerOnly>
+            </Route>
             <Route path="/reports">
               <OwnerOnly>
                 <Reports />

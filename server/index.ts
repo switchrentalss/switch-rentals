@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { log } from "./log";
 import { serveStatic } from "./static";
 import { setupAuth } from "./auth";
+import { ensureInventoryValueColumns } from "./db";
 
 const app = express();
 app.use(express.json());
@@ -47,6 +48,7 @@ app.use((req, res, next) => {
     cwd: process.cwd(),
   });
 
+  await ensureInventoryValueColumns();
   await setupAuth(app);
   const server = await registerRoutes(app);
 

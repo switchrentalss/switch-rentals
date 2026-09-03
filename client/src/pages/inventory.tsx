@@ -29,6 +29,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Package, Search, Plus, Edit, MoreHorizontal, Trash2, Eye, Settings } from "lucide-react";
 import { formatINR, catalogueCode } from "@/lib/format";
 import type { InventoryItem } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 
 function getStockStatus(item: InventoryItem): { status: string; variant: "default" | "secondary" | "destructive" } {
   const stockPercentage = (item.availableStock / item.totalStock) * 100;
@@ -66,6 +68,7 @@ export default function Inventory() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
+  const { isOwner } = useAuth();
 
   const { data: inventory, isLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -81,6 +84,7 @@ export default function Inventory() {
         description: "Inventory item deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-value"] });
       setDeleteDialogOpen(false);
       setItemToDelete(null);
     },
@@ -100,6 +104,7 @@ export default function Inventory() {
     },
     onSuccess: (data: { itemsAdded: number; clientsAdded: number; items: number; clients: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-value"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       toast({
         title: "Catalogue loaded",
@@ -139,6 +144,11 @@ export default function Inventory() {
                   />
               </div>
               <div className="flex items-center gap-2">
+              {isOwner && (
+                <Link href="/stock-value">
+                  <Button variant="outline">Stock value</Button>
+                </Link>
+              )}
               <Button variant="outline" onClick={() => bootstrap.mutate()} disabled={bootstrap.isPending}>
                 Load Switch catalogue
               </Button>
@@ -196,6 +206,9 @@ export default function Inventory() {
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Day</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Maintenance</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replace Cost</th>
+                      {isOwner && (
+                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buy</th>
+                      )}
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -233,6 +246,13 @@ export default function Inventory() {
                           <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                             {item.replacementCost ? `₹${item.replacementCost}` : '-'}
                           </td>
+                          {isOwner && (
+                            <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {item.purchaseCost && Number(item.purchaseCost) > 0
+                                ? `${formatINR(item.purchaseCost)} · ${Number(item.purchaseGstRate) === 5 ? "5%" : "18%"}`
+                                : "—"}
+                            </td>
+                          )}
                           <td className="px-2 py-4 whitespace-nowrap">
                             <Badge variant={stockStatus.variant} className="text-xs">
                               {stockStatus.status}

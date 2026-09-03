@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { breakageFromPurchase } from "@shared/inventory-value";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,8 @@ const inventorySchema = z.object({
   availableStock: z.number().min(0, "Available stock cannot be negative"),
   outStock: z.number().min(0, "Out stock cannot be negative").default(0),
   ratePerDay: z.string().min(1, "Rate per day is required"),
+  purchaseCost: z.string().optional(),
+  purchaseGstRate: z.string().optional(),
   replacementCost: z.string().optional(),
   status: z.string().default("in_stock"),
   location: z.string().optional(),
@@ -98,6 +102,8 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
       availableStock: editingItem.availableStock,
       outStock: editingItem.outStock || 0,
       ratePerDay: editingItem.ratePerDay,
+      purchaseCost: editingItem.purchaseCost && Number(editingItem.purchaseCost) > 0 ? String(editingItem.purchaseCost) : "",
+      purchaseGstRate: Number(editingItem.purchaseGstRate) === 5 ? "5.00" : "18.00",
       replacementCost: editingItem.replacementCost || "",
       status: editingItem.status || "in_stock",
       location: editingItem.location || "",
@@ -116,6 +122,8 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
       availableStock: 1,
       outStock: 0,
       ratePerDay: "",
+      purchaseCost: "",
+      purchaseGstRate: "18.00",
       replacementCost: "",
       status: "in_stock",
       location: "",
@@ -125,6 +133,35 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
       notes: "",
     },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    if (editingItem) {
+      form.reset({
+        sku: editingItem.sku || "",
+        itemCode: editingItem.itemCode || "",
+        name: editingItem.name,
+        description: editingItem.description || "",
+        category: editingItem.category,
+        subcategory: editingItem.subcategory || "",
+        totalStock: editingItem.totalStock,
+        availableStock: editingItem.availableStock,
+        outStock: editingItem.outStock || 0,
+        ratePerDay: editingItem.ratePerDay,
+        purchaseCost: editingItem.purchaseCost && Number(editingItem.purchaseCost) > 0 ? String(editingItem.purchaseCost) : "",
+        purchaseGstRate: Number(editingItem.purchaseGstRate) === 5 ? "5.00" : "18.00",
+        replacementCost: editingItem.replacementCost || "",
+        status: editingItem.status || "in_stock",
+        location: editingItem.location || "",
+        supplier: editingItem.supplier || "",
+        purchaseDate: editingItem.purchaseDate || "",
+        warrantyExpiry: editingItem.warrantyExpiry || "",
+        notes: editingItem.notes || "",
+      });
+    } else {
+      form.reset();
+    }
+  }, [open, editingItem, form]);
 
   const createInventoryMutation = useMutation({
     mutationFn: async (data: InventoryFormData) => {
@@ -136,6 +173,7 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
         description: "Inventory item created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-value"] });
       onOpenChange(false);
       form.reset();
     },
@@ -158,6 +196,7 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
         description: "Inventory item updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-value"] });
       onOpenChange(false);
       form.reset();
     },
@@ -179,10 +218,21 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
       return;
     }
     
+    const payload = {
+      ...data,
+      purchaseGstRate: Number(data.purchaseGstRate) === 5 ? "5.00" : "18.00",
+      purchaseCost: data.purchaseCost && Number(data.purchaseCost) > 0 ? data.purchaseCost : "0.00",
+      replacementCost:
+        data.replacementCost && Number(data.replacementCost) > 0
+          ? data.replacementCost
+          : data.purchaseCost && Number(data.purchaseCost) > 0
+            ? String(breakageFromPurchase(Number(data.purchaseCost)))
+            : data.replacementCost,
+    };
     if (editingItem) {
-      updateInventoryMutation.mutate(data);
+      updateInventoryMutation.mutate(payload);
     } else {
-      createInventoryMutation.mutate(data);
+      createInventoryMutation.mutate(payload);
     }
   };
 
@@ -386,18 +436,86 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
 
               <FormField
                 control={form.control}
+                name="purchaseCost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Buy cost (₹, ex-GST)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="100.00"
+                        {...field}
+                        step="0.01"
+                        onBlur={() => {
+                          field.onBlur();
+                          const buy = Number(form.getValues("purchaseCost"));
+                          const listed = form.getValues("replacementCost");
+                          if (buy > 0 && (!listed || Number(listed) <= 0)) {
+                            form.setValue("replacementCost", breakageFromPurchase(buy).toFixed(2));
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>What the mill paid the supplier, before GST.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="purchaseGstRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST on purchase</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "18.00"}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="GST rate" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="5.00">5%</SelectItem>
+                        <SelectItem value="18.00">18%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Input GST on the buy. Breakage billed to clients is always 18%.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="replacementCost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Replace Cost (₹)</FormLabel>
+                    <FormLabel>Breakage / replace (₹)</FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
-                        placeholder="162.00" 
+                        placeholder="125.00" 
                         {...field}
                         step="0.01"
                       />
                     </FormControl>
+                    <FormDescription>
+                      Usually 125% of buy. GST on this line to the client is always 18%.
+                      {Number(form.watch("purchaseCost")) > 0 ? (
+                        <button
+                          type="button"
+                          className="ml-2 underline text-foreground"
+                          onClick={() =>
+                            form.setValue(
+                              "replacementCost",
+                              breakageFromPurchase(Number(form.getValues("purchaseCost"))).toFixed(2),
+                            )
+                          }
+                        >
+                          Set 125% of buy
+                        </button>
+                      ) : null}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -531,9 +649,15 @@ export function InventoryModal({ open, onOpenChange, editingItem }: InventoryMod
               </Button>
               <Button 
                 type="submit" 
-                disabled={createInventoryMutation.isPending}
+                disabled={createInventoryMutation.isPending || updateInventoryMutation.isPending}
               >
-                {createInventoryMutation.isPending ? "Creating..." : "Create Item"}
+                {editingItem
+                  ? updateInventoryMutation.isPending
+                    ? "Saving…"
+                    : "Save item"
+                  : createInventoryMutation.isPending
+                    ? "Creating..."
+                    : "Create Item"}
               </Button>
             </div>
           </form>

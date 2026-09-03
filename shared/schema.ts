@@ -27,6 +27,8 @@ export const inventoryItems = pgTable("inventory_items", {
   ratePerDay: decimal("rate_per_day", { precision: 10, scale: 2 }).notNull(),
   maintenanceStatus: varchar("maintenance_status", { length: 50 }).notNull().default("available"),
   replacementCost: decimal("replacement_cost", { precision: 10, scale: 2 }),
+  purchaseCost: decimal("purchase_cost", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  purchaseGstRate: decimal("purchase_gst_rate", { precision: 5, scale: 2 }).notNull().default("18.00"),
   status: varchar("status", { length: 30 }).notNull().default("in_stock"),
   location: varchar("location", { length: 100 }),
   supplier: varchar("supplier", { length: 255 }),

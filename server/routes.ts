@@ -462,6 +462,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/inventory-value", async (_req, res) => {
+    try {
+      res.json(await storage.getInventoryValue());
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to load inventory value" });
+    }
+  });
+
+  app.get("/api/workbook", async (_req, res) => {
+    try {
+      const { readWorkbook } = await import("./import-workbook");
+      res.json(readWorkbook());
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to load workbook" });
+    }
+  });
+
   app.get("/api/finance", async (_req, res) => {
     try {
       res.json(await getSwitchFinance());

@@ -410,7 +410,8 @@ export default function FinancialDashboard() {
                 <p>Total in {formatINR(data.capex?.totalInvested || 0)}</p>
                 <p>Crockery bought {formatINR(data.capex?.stockPurchases || 0)}</p>
                 <p className="font-medium">Still unspent {formatINR(data.capex?.remainingCapital || 0)}</p>
-                <Link href="/books"><Button variant="outline" size="sm" className="mt-2">Enter a cost in Books</Button></Link>
+                <p className="text-xs text-muted-foreground">Opening stock plus this year’s CCG. Civil / legal mill setup stays on the Workbook CapEx tab.</p>
+                <Link href="/workbook"><Button variant="outline" size="sm" className="mt-2">Open Excel workbook</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>

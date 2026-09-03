@@ -43,8 +43,17 @@ import {
   type InsertCapitalEntry,
 } from "@shared/schema";
 import { isInvoicePaymentKind, lateReturnCharge, toteCharge, taxInvoiceReady } from "@shared/hire";
+import {
+  BREAKAGE_GST_RATE,
+  breakageFromPurchase,
+  breakageGstAmount,
+  purchaseFromBreakage,
+  purchaseGstAmount,
+  remainingStockValue,
+  round2,
+} from "@shared/inventory-value";
 import { db } from "./db";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -59,6 +68,35 @@ export interface IStorage {
 
   // Inventory Items
   getInventoryItems(): Promise<InventoryItem[]>;
+  getInventoryValue(): Promise<{
+    story: {
+      pieces: number;
+      stockAtCost: number;
+      gstPaidOnBuy: number;
+      breakageValue: number;
+      breakageGst: number;
+      rentRecovered: number;
+      breakageRecovered: number;
+      remainingValue: number;
+    };
+    breakageGstRate: number;
+    lines: {
+      id: number;
+      sku: string;
+      name: string;
+      qty: number;
+      purchaseCost: number;
+      purchaseGstRate: number;
+      gstPaidOnBuy: number;
+      breakagePrice: number;
+      stockAtCost: number;
+      breakageValue: number;
+      rentRecovered: number;
+      breakageRecovered: number;
+      remainingValue: number;
+      ratePerDay: number;
+    }[];
+  }>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
   createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(id: number, item: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined>;
@@ -149,6 +187,80 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(inventoryItems);
   }
 
+  async getInventoryValue() {
+    const items = await this.getInventoryItems();
+    const rentRows = await db
+      .select({
+        itemId: invoiceItems.itemId,
+        rent: sql<string>`coalesce(sum(${invoiceItems.lineTotal}::numeric), 0)`,
+      })
+      .from(invoiceItems)
+      .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+      .where(
+        and(
+          inArray(invoices.invoiceType, ["gst_invoice", "final_invoice"]),
+          or(isNull(invoices.status), ne(invoices.status, "void")),
+        ),
+      )
+      .groupBy(invoiceItems.itemId);
+    const rentByItem = new Map(rentRows.map((r) => [r.itemId, Number(r.rent) || 0]));
+
+    const breakRows = await db
+      .select({
+        itemId: inventoryReturns.itemId,
+        breakage: sql<string>`coalesce(sum(${inventoryReturns.penaltyAmount}::numeric), 0)`,
+      })
+      .from(inventoryReturns)
+      .groupBy(inventoryReturns.itemId);
+    const breakByItem = new Map(breakRows.map((r) => [r.itemId, Number(r.breakage) || 0]));
+
+    const lines = items.map((item) => {
+      const qty = Math.max(0, item.totalStock || 0);
+      const listedBreak = Number(item.replacementCost || 0);
+      let purchase = Number(item.purchaseCost || 0);
+      if (purchase <= 0 && listedBreak > 0) purchase = purchaseFromBreakage(listedBreak);
+      const gstPct = Number(item.purchaseGstRate || 18) === 5 ? 5 : 18;
+      const breakagePrice = listedBreak > 0 ? listedBreak : breakageFromPurchase(purchase);
+      const stockAtCost = round2(qty * purchase);
+      const gstPaidOnBuy = round2(qty * purchaseGstAmount(purchase, gstPct));
+      const breakageValue = round2(qty * breakagePrice);
+      const rentRecovered = round2(rentByItem.get(item.id) || 0);
+      const breakageRecovered = round2(breakByItem.get(item.id) || 0);
+      return {
+        id: item.id,
+        sku: item.sku || item.itemCode || "",
+        name: item.name,
+        qty,
+        purchaseCost: round2(purchase),
+        purchaseGstRate: gstPct,
+        gstPaidOnBuy,
+        breakagePrice: round2(breakagePrice),
+        stockAtCost,
+        breakageValue,
+        rentRecovered,
+        breakageRecovered,
+        remainingValue: remainingStockValue(stockAtCost, rentRecovered),
+        ratePerDay: Number(item.ratePerDay || 0),
+      };
+    });
+
+    const sum = (key: keyof (typeof lines)[0]) => round2(lines.reduce((s, row) => s + Number(row[key] || 0), 0));
+    return {
+      story: {
+        pieces: lines.reduce((s, r) => s + r.qty, 0),
+        stockAtCost: sum("stockAtCost"),
+        gstPaidOnBuy: sum("gstPaidOnBuy"),
+        breakageValue: round2(lines.reduce((s, r) => s + r.breakageValue, 0)),
+        breakageGst: round2(lines.reduce((s, r) => s + breakageGstAmount(r.breakageValue), 0)),
+        rentRecovered: sum("rentRecovered"),
+        breakageRecovered: sum("breakageRecovered"),
+        remainingValue: sum("remainingValue"),
+      },
+      breakageGstRate: BREAKAGE_GST_RATE,
+      lines: lines.sort((a, b) => b.stockAtCost - a.stockAtCost),
+    };
+  }
+
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
     const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
     return item || undefined;
@@ -163,6 +275,11 @@ export class DatabaseStorage implements IStorage {
       subcategory: item.subcategory || null,
       outStock: item.totalStock - item.availableStock,
       replacementCost: item.replacementCost || null,
+      purchaseCost:
+        item.purchaseCost && Number(item.purchaseCost) > 0
+          ? item.purchaseCost
+          : String(purchaseFromBreakage(Number(item.replacementCost || 0))),
+      purchaseGstRate: Number(item.purchaseGstRate) === 5 ? "5.00" : "18.00",
       status: item.status || "in_stock",
       location: item.location || null,
       supplier: item.supplier || null,
@@ -201,6 +318,11 @@ export class DatabaseStorage implements IStorage {
             itemCode: row.itemCode || row.sku,
             ratePerDay: row.ratePerDay,
             replacementCost: row.replacementCost,
+            purchaseCost:
+              row.purchaseCost && Number(row.purchaseCost) > 0
+                ? row.purchaseCost
+                : String(purchaseFromBreakage(Number(row.replacementCost || 0))),
+            purchaseGstRate: Number(row.purchaseGstRate) === 5 ? "5.00" : "18.00",
             description: row.description,
             location: row.location || "Gupta Mills",
             updatedAt: new Date(),
@@ -388,6 +510,8 @@ export class DatabaseStorage implements IStorage {
           ratePerDay: inventoryItems.ratePerDay,
           maintenanceStatus: inventoryItems.maintenanceStatus,
           replacementCost: inventoryItems.replacementCost,
+          purchaseCost: inventoryItems.purchaseCost,
+          purchaseGstRate: inventoryItems.purchaseGstRate,
           status: inventoryItems.status,
           location: inventoryItems.location,
           supplier: inventoryItems.supplier,

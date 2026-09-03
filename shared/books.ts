@@ -9,9 +9,15 @@ export const COST_GROUPS = [
 export const EXPENSE_CATEGORIES: Record<string, string[]> = {
   fixed: ["Rent with TDS", "Salary", "Electricity & water", "Insurance", "Petty cash", "Internet"],
   ops: ["OPS supply", "Transport"],
-  admin: ["CA, Fire, BMC, GST filing", "CCG breakage (unpaid)", "Business development", "Client refunds"],
+  admin: [
+    "CA, Fire, BMC, GST filing",
+    "CCG breakage (unpaid)",
+    "Business development",
+    "Client refunds",
+    "Food & beverages",
+  ],
   nonctrl: ["Bank charges", "CAM / society", "AMC", "Interest on capex"],
-  capex: ["New CCG purchase"],
+  capex: ["New CCG purchase", "Opening CCG stock", "Mill setup", "Refund to Samir"],
 };
 
 export { PAYMENT_KINDS } from "./hire";

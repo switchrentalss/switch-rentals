@@ -9,6 +9,8 @@ import {
   IndianRupee,
   FileText,
   BookOpen,
+  Scale,
+  Table2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -23,7 +25,9 @@ const millNav = [
 
 const ownerNav = [
   { name: "Books", href: "/books", icon: BookOpen },
+  { name: "Workbook", href: "/workbook", icon: Table2 },
   { name: "Money", href: "/financial", icon: IndianRupee },
+  { name: "Stock value", href: "/stock-value", icon: Scale },
   { name: "Reports", href: "/reports", icon: BarChart3 },
 ];
 

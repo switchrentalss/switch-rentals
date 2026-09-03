@@ -147,6 +147,11 @@ export default function Dashboard() {
   }>({ queryKey: ["/api/finance"], enabled: isOwner });
   const s = finance?.story;
 
+  const { data: stockValue } = useQuery<{ story: { remainingValue: number; stockAtCost: number } }>({
+    queryKey: ["/api/inventory-value"],
+    enabled: isOwner,
+  });
+
   const { data: leads = [] } = useQuery<Enquiry[]>({
     queryKey: ["/api/enquiries"],
   });
@@ -155,6 +160,7 @@ export default function Dashboard() {
     mutationFn: async () => (await apiRequest("POST", "/api/ops/bootstrap")).json(),
     onSuccess: (data: { itemsAdded: number; clientsAdded: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-value"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       toast({
         title: "Ready for the mill",
@@ -445,6 +451,28 @@ export default function Dashboard() {
             <Link href="/financial">
               <Button>
                 Open money screen
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+        )}
+
+        {isOwner && stockValue && (
+        <Card>
+          <CardContent className="p-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Crockery still on the books</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">
+                Remaining {formatINR(stockValue.story.remainingValue)}
+                <span className="text-muted-foreground font-normal"> · </span>
+                Stock at cost {formatINR(stockValue.story.stockAtCost)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Buy cost of pieces on hand minus hire already recovered on GST bills.</p>
+            </div>
+            <Link href="/stock-value">
+              <Button variant="outline">
+                Open stock value
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

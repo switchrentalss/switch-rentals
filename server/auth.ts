@@ -22,6 +22,8 @@ const OWNER_PATHS = [
   "/api/capital-entries",
   "/api/rental-bills",
   "/api/ops/bootstrap",
+  "/api/inventory-value",
+  "/api/workbook",
 ];
 
 const PUBLIC_API = new Set(["/api/auth/login", "/api/auth/logout", "/api/auth/me"]);

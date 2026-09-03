@@ -203,11 +203,13 @@ export default function Books() {
     <div className="flex flex-col min-h-screen">
       <Header
         title="Books"
-        subtitle="This replaces the Excel tracker. Enter hire bills, collections, running costs, and month-end bank here — the Financial Dashboard reads only these records."
+        subtitle="This replaces the Excel tracker. Hire bills and collections are here. Every Forecast P&L tab is on Workbook — those cash lines are already posted as costs."
       />
       <div className="p-6 space-y-4">
         <p className="text-sm text-muted-foreground">
           After you save, open the <Link href="/financial"><span className="underline">Financial Dashboard</span></Link> to see operating profit.
+          Full Excel tabs (CapEx, P&amp;L, cash flow, rent, salary, CA, OPS, CCG…) are on{" "}
+          <Link href="/workbook"><span className="underline">Workbook</span></Link>.
           Deposits stay off revenue. GST is billed but is not margin.
         </p>
         <Tabs defaultValue="bill">
